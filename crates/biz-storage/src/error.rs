@@ -15,6 +15,9 @@ pub enum StorageError {
     #[error("Phone number already exists")]
     PhoneAlreadyExists,
 
+    #[error("Candidate has already applied for this opportunity")]
+    DuplicateApplication,
+
     #[error("Invalid credentials")]
     InvalidCredentials,
 

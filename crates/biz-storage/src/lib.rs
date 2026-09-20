@@ -1,3 +1,4 @@
+pub mod application_repo;
 pub mod candidate_repo;
 pub mod company_repo;
 pub mod error;
@@ -8,6 +9,7 @@ pub mod token_repo;
 pub mod token_service;
 pub mod user_repo;
 
+pub use application_repo::ApplicationRepository;
 pub use candidate_repo::CandidateRepository;
 pub use company_repo::CompanyRepository;
 pub use error::StorageError;
