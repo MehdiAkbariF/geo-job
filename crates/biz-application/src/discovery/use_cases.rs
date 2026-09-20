@@ -4,6 +4,8 @@ use biz_domain::discovery::{SearchPageResult, SearchQuery, SortBy};
 use biz_storage::DiscoveryRepository;
 use geo_types::{BoundingBox, GeoPoint, Radius};
 
+
+#[derive(Clone)]
 pub struct DiscoveryUseCases {
     discovery_repo: DiscoveryRepository,
 }

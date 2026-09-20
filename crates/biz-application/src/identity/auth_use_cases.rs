@@ -4,6 +4,10 @@ use biz_domain::identity::{Email, NewUser, RawPassword};
 use biz_storage::{PasswordService, StorageError, TokenRepository, TokenService, UserRepository};
 use uuid::Uuid;
 
+
+
+
+#[derive(Clone)]
 pub struct AuthUseCases {
     user_repo: UserRepository,
     token_repo: TokenRepository,

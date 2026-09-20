@@ -1,0 +1,29 @@
+[package]
+name = "biz-api"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+biz-domain = { path = "../../crates/biz-domain" }
+biz-storage = { path = "../../crates/biz-storage" }
+biz-application = { path = "../../crates/biz-application" }
+geo-types = { path = "../../crates/geo-types" }
+geo-storage = { path = "../../crates/geo-storage" }
+
+axum.workspace = true
+tokio.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+sqlx.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+utoipa.workspace = true
+utoipa-swagger-ui.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+rust_decimal.workspace = true

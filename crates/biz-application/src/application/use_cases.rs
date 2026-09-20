@@ -7,6 +7,8 @@ use biz_storage::{
 };
 use uuid::Uuid;
 
+
+#[derive(Clone)]
 pub struct ApplicationUseCases {
     app_repo: ApplicationRepository,
     opp_repo: OpportunityRepository,

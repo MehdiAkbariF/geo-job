@@ -13,6 +13,7 @@ members = [
     "crates/biz-application",
     "apps/map-api",
     "apps/geo-importer",
+    "apps/biz-api",
 ]
 
 [workspace.package]
@@ -40,3 +41,5 @@ jsonwebtoken = "9.3"
 rand = "0.8"
 sha2 = "0.10"
 rust_decimal = { version = "1.35", features = ["serde-float"] }
+utoipa = { version = "4.2", features = ["axum_extras", "uuid", "chrono", "decimal"] }
+utoipa-swagger-ui = { version = "7.1", features = ["axum"] }

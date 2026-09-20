@@ -3,6 +3,8 @@ use crate::error::ApplicationError;
 use biz_storage::{CompanyRepository, GovernanceRepository};
 use uuid::Uuid;
 
+
+#[derive(Clone)]
 pub struct GovernanceUseCases {
     gov_repo: GovernanceRepository,
     company_repo: CompanyRepository,

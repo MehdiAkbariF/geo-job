@@ -3,6 +3,7 @@ use crate::error::ApplicationError;
 use biz_storage::{CandidateRepository, StorageError};
 use uuid::Uuid;
 
+#[derive(Clone)]
 pub struct CandidateUseCases {
     candidate_repo: CandidateRepository,
 }

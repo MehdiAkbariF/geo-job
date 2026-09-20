@@ -5,6 +5,8 @@ use biz_domain::saved::SavedSearch;
 use biz_storage::{CandidateRepository, SavedRepository, StorageError};
 use uuid::Uuid;
 
+
+#[derive(Clone)]
 pub struct SavedUseCases {
     saved_repo: SavedRepository,
     candidate_repo: CandidateRepository,

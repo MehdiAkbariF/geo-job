@@ -6,6 +6,8 @@ use biz_storage::{CompanyRepository, OpportunityRepository, StorageError};
 use chrono::{Duration, Utc};
 use uuid::Uuid;
 
+
+#[derive(Clone)]
 pub struct OpportunityUseCases {
     opp_repo: OpportunityRepository,
     company_repo: CompanyRepository,
