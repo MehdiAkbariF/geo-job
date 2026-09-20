@@ -1,6 +1,8 @@
 use crate::error::StorageError;
 use biz_domain::candidate::{Candidate, CandidateEducation, CandidateExperience, CandidateResume};
+use biz_domain::saved::CandidatePreferences;
 use chrono::{DateTime, NaiveDate, Utc};
+use rust_decimal::Decimal;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -35,6 +37,19 @@ impl CandidateDbRow {
             updated_at: self.updated_at,
         }
     }
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct ExperienceDbRow {
+    id: Uuid,
+    candidate_id: Uuid,
+    title: String,
+    company_name: String,
+    start_date: NaiveDate,
+    end_date: Option<NaiveDate>,
+    is_current: bool,
+    description: Option<String>,
+    created_at: DateTime<Utc>,
 }
 
 #[derive(Clone)]
@@ -93,7 +108,7 @@ impl CandidateRepository {
         Ok(row.to_domain())
     }
 
-    // Skills Management
+    // Skills
     pub async fn set_skills(&self, candidate_id: Uuid, skill_ids: &[Uuid]) -> Result<(), StorageError> {
         let mut tx = self.pool.begin().await?;
 
@@ -112,6 +127,12 @@ impl CandidateRepository {
 
         tx.commit().await?;
         Ok(())
+    }
+
+    pub async fn get_skills(&self, candidate_id: Uuid) -> Result<Vec<Uuid>, StorageError> {
+        let sql = "SELECT skill_id FROM candidate_skills WHERE candidate_id = $1";
+        let rows: Vec<Uuid> = sqlx::query_scalar(sql).bind(candidate_id).fetch_all(&self.pool).await?;
+        Ok(rows)
     }
 
     // Experience Management
@@ -145,30 +166,103 @@ impl CandidateRepository {
         Ok(id)
     }
 
-    // Resume Management
-    pub async fn add_resume(
-        &self,
-        candidate_id: Uuid,
-        storage_key: &str,
-        filename: &str,
-        mime_type: &str,
-        file_size: i64,
-    ) -> Result<Uuid, StorageError> {
-        let sql = r#"
-            INSERT INTO candidate_resumes (candidate_id, storage_key, filename, mime_type, file_size)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING id
-        "#;
-
-        let id: Uuid = sqlx::query_scalar(sql)
+    pub async fn delete_experience(&self, candidate_id: Uuid, exp_id: Uuid) -> Result<(), StorageError> {
+        let sql = "DELETE FROM candidate_experiences WHERE id = $1 AND candidate_id = $2";
+        sqlx::query(sql)
+            .bind(exp_id)
             .bind(candidate_id)
-            .bind(storage_key)
-            .bind(filename)
-            .bind(mime_type)
-            .bind(file_size)
-            .fetch_one(&self.pool)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn list_experiences(&self, candidate_id: Uuid) -> Result<Vec<CandidateExperience>, StorageError> {
+        let sql = "SELECT * FROM candidate_experiences WHERE candidate_id = $1 ORDER BY start_date DESC";
+        let rows = sqlx::query_as::<_, ExperienceDbRow>(sql)
+            .bind(candidate_id)
+            .fetch_all(&self.pool)
             .await?;
 
-        Ok(id)
+        Ok(rows
+            .into_iter()
+            .map(|r| CandidateExperience {
+                id: r.id,
+                candidate_id: r.candidate_id,
+                title: r.title,
+                company_name: r.company_name,
+                start_date: r.start_date,
+                end_date: r.end_date,
+                is_current: r.is_current,
+                description: r.description,
+                created_at: r.created_at,
+            })
+            .collect())
+    }
+
+    // Preferences
+    pub async fn get_preferences(&self, candidate_id: Uuid) -> Result<Option<CandidatePreferences>, StorageError> {
+        #[derive(sqlx::FromRow)]
+        struct PrefsDbRow {
+            candidate_id: Uuid,
+            preferred_workplace_types: Vec<String>,
+            preferred_opportunity_types: Vec<String>,
+            expected_salary_min: Option<Decimal>,
+            salary_currency: String,
+            remote_only: bool,
+            updated_at: DateTime<Utc>,
+        }
+
+        let sql = "SELECT * FROM candidate_preferences WHERE candidate_id = $1";
+        let row: Option<PrefsDbRow> = sqlx::query_as(sql)
+            .bind(candidate_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        Ok(row.map(|r| CandidatePreferences {
+            candidate_id: r.candidate_id,
+            preferred_workplace_types: r.preferred_workplace_types,
+            preferred_opportunity_types: r.preferred_opportunity_types,
+            expected_salary_min: r.expected_salary_min,
+            salary_currency: r.salary_currency,
+            remote_only: r.remote_only,
+            updated_at: r.updated_at,
+        }))
+    }
+
+    pub async fn upsert_preferences(
+        &self,
+        candidate_id: Uuid,
+        workplace_types: &[String],
+        opportunity_types: &[String],
+        expected_salary_min: Option<Decimal>,
+        salary_currency: &str,
+        remote_only: bool,
+    ) -> Result<(), StorageError> {
+        let sql = r#"
+            INSERT INTO candidate_preferences (
+                candidate_id, preferred_workplace_types, preferred_opportunity_types,
+                expected_salary_min, salary_currency, remote_only, updated_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, NOW())
+            ON CONFLICT (candidate_id) DO UPDATE SET
+                preferred_workplace_types = EXCLUDED.preferred_workplace_types,
+                preferred_opportunity_types = EXCLUDED.preferred_opportunity_types,
+                expected_salary_min = EXCLUDED.expected_salary_min,
+                salary_currency = EXCLUDED.salary_currency,
+                remote_only = EXCLUDED.remote_only,
+                updated_at = NOW()
+        "#;
+
+        sqlx::query(sql)
+            .bind(candidate_id)
+            .bind(workplace_types)
+            .bind(opportunity_types)
+            .bind(expected_salary_min)
+            .bind(salary_currency)
+            .bind(remote_only)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
     }
 }

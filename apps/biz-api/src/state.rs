@@ -45,7 +45,7 @@ impl AppState {
         );
         let opp_use_cases = OpportunityUseCases::new(opp_repo.clone(), company_repo.clone());
         let discovery_use_cases = DiscoveryUseCases::new(discovery_repo);
-        let candidate_use_cases = CandidateUseCases::new(candidate_repo.clone());
+        let candidate_use_cases = CandidateUseCases::new(candidate_repo.clone(), app_repo.clone());
         let app_use_cases = ApplicationUseCases::new(
             app_repo,
             opp_repo.clone(),

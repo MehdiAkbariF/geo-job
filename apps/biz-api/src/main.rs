@@ -5,7 +5,7 @@ mod openapi;
 mod state;
 
 use axum::{
-    routing::{get, post},
+    routing::{delete, get, post, put},
     Router,
 };
 use geo_storage::{create_connection_pool, run_migrations, DatabaseConfig};
@@ -49,25 +49,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let app_state = AppState::new(pool, jwt_secret);
 
-    // REST API Routes (/api/v1)
     let api_router = Router::new()
         // Auth
         .route("/auth/register", post(handlers::auth::register_handler))
         .route("/auth/login", post(handlers::auth::login_handler))
+        .route("/auth/refresh", post(handlers::auth::refresh_handler))
+        .route("/auth/logout", post(handlers::auth::logout_handler))
         .route("/me", get(handlers::auth::me_handler))
+        
+        // Candidate Profile & Experience
+        .route("/candidates/me", get(handlers::candidate::get_my_profile_handler).put(handlers::candidate::update_my_profile_handler))
+        .route("/candidates/me/experiences", post(handlers::candidate::add_experience_handler))
+        .route("/candidates/me/experiences/:id", delete(handlers::candidate::delete_experience_handler))
+        .route("/candidates/me/skills", put(handlers::candidate::set_skills_handler))
+        .route("/candidates/me/preferences", get(handlers::candidate::get_preferences_handler).put(handlers::candidate::set_preferences_handler))
+        .route("/candidates/me/applications", get(handlers::candidate::list_my_applications_handler))
+
         // Discovery / Search
         .route("/opportunities/search", get(handlers::discovery::search_opportunities_handler))
+
         // Opportunities Lifecycle
         .route("/companies/:company_id/opportunities", post(handlers::opportunity::create_opportunity_handler))
         .route("/opportunities/:id/publish", post(handlers::opportunity::publish_opportunity_handler))
         .route("/opportunities/:id/pause", post(handlers::opportunity::pause_opportunity_handler))
         .route("/opportunities/:id/close", post(handlers::opportunity::close_opportunity_handler))
+
         // Applications
         .route("/opportunities/:id/applications", post(handlers::application::submit_application_handler))
         .route("/applications/:id/status", post(handlers::application::change_application_status_handler))
-        // Saved Items
+
+        // Saved Items (Opportunities, Companies, Searches)
         .route("/opportunities/:id/save", post(handlers::saved::save_opportunity_handler).delete(handlers::saved::remove_saved_opportunity_handler))
         .route("/me/saved-opportunities", get(handlers::saved::list_saved_opportunities_handler))
+        .route("/companies/:id/save", post(handlers::saved::save_company_handler).delete(handlers::saved::remove_saved_company_handler))
+        .route("/me/saved-companies", get(handlers::saved::list_saved_companies_handler))
+        .route("/me/saved-searches", post(handlers::saved::save_search_handler).get(handlers::saved::list_saved_searches_handler))
+
         // Governance / Reports
         .route("/opportunities/:id/reports", post(handlers::governance::report_opportunity_handler));
 
