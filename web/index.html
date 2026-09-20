@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نقشه برداری با نام فارسی معابر (PostGIS)</title>
+    
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+
+    <style>
+        body { margin: 0; padding: 0; font-family: Tahoma, sans-serif; background: #f8fafc; }
+        #map { width: 100vw; height: 100vh; }
+        .info-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+            background: white;
+            padding: 16px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            max-width: 320px;
+            font-size: 13px;
+            line-height: 1.6;
+            border: 1px solid #e2e8f0;
+        }
+        .badge {
+            background: #2563eb;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="info-panel">
+        <span class="badge">پلتفرم برداری PostGIS + نام معابر</span>
+        <h4 style="margin: 8px 0 6px 0; color: #0f172a;">نقشه پایه شهری</h4>
+        <div>• خطوط معابر و نام فارسی خیابان‌ها فعال هستند.</div>
+        <div id="status" style="margin-top: 8px; color: #059669; font-weight: bold;">در حال نمایش...</div>
+    </div>
+
+    <div id="map"></div>
+
+    <script>
+        const API_BASE = "http://localhost:8080";
+
+        // پلاگین حروف راست‌به‌چپ فارسی
+        if (maplibregl.getRTLTextPluginStatus() === 'unavailable') {
+            maplibregl.setRTLTextPlugin(
+                'https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.min.js',
+                null,
+                true
+            );
+        }
+
+        const map = new maplibregl.Map({
+            container: 'map',
+            center: [51.39, 35.72],
+            zoom: 13,
+            minZoom: 4,
+            maxZoom: 18,
+            localFontFamily: 'Tahoma, "Segoe UI", Arial, sans-serif',
+            style: {
+                version: 8,
+                // سرور باینری رسمی فونت با ساپورت یونیکد فارسی
+                glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
+                sources: {
+                    'base_tiles': {
+                        type: 'vector',
+                        tiles: [`${API_BASE}/api/v1/base-tiles/{z}/{x}/{y}.mvt`],
+                        minzoom: 4,
+                        maxzoom: 18
+                    }
+                },
+                layers: [
+                    // ۱. رنگ زمینه شهری
+                    {
+                        id: 'background',
+                        type: 'background',
+                        paint: { 'background-color': '#f8fafc' }
+                    },
+                    // ۲. معابر فرعی
+                    {
+                        id: 'roads_minor_casing',
+                        type: 'line',
+                        source: 'base_tiles',
+                        'source-layer': 'roads',
+                        filter: ['!in', 'highway', 'motorway', 'trunk', 'primary', 'secondary'],
+                        layout: { 'line-cap': 'round', 'line-join': 'round' },
+                        paint: { 'line-color': '#cbd5e1', 'line-width': 2.2 }
+                    },
+                    {
+                        id: 'roads_minor',
+                        type: 'line',
+                        source: 'base_tiles',
+                        'source-layer': 'roads',
+                        filter: ['!in', 'highway', 'motorway', 'trunk', 'primary', 'secondary'],
+                        layout: { 'line-cap': 'round', 'line-join': 'round' },
+                        paint: { 'line-color': '#ffffff', 'line-width': 1.6 }
+                    },
+                    // ۳. خیابان‌های اصلی
+                    {
+                        id: 'roads_primary_casing',
+                        type: 'line',
+                        source: 'base_tiles',
+                        'source-layer': 'roads',
+                        filter: ['in', 'highway', 'primary', 'secondary', 'primary_link'],
+                        layout: { 'line-cap': 'round', 'line-join': 'round' },
+                        paint: { 'line-color': '#fde047', 'line-width': 4.5 }
+                    },
+                    {
+                        id: 'roads_primary',
+                        type: 'line',
+                        source: 'base_tiles',
+                        'source-layer': 'roads',
+                        filter: ['in', 'highway', 'primary', 'secondary', 'primary_link'],
+                        layout: { 'line-cap': 'round', 'line-join': 'round' },
+                        paint: { 'line-color': '#fef08a', 'line-width': 3.2 }
+                    },
+                    // ۴. بزرگراه‌ها
+                    {
+                        id: 'roads_motorway_casing',
+                        type: 'line',
+                        source: 'base_tiles',
+                        'source-layer': 'roads',
+                        filter: ['in', 'highway', 'motorway', 'trunk', 'motorway_link', 'trunk_link'],
+                        layout: { 'line-cap': 'round', 'line-join': 'round' },
+                        paint: { 'line-color': '#ea580c', 'line-width': 6.0 }
+                    },
+                    {
+                        id: 'roads_motorway',
+                        type: 'line',
+                        source: 'base_tiles',
+                        'source-layer': 'roads',
+                        filter: ['in', 'highway', 'motorway', 'trunk', 'motorway_link', 'trunk_link'],
+                        layout: { 'line-cap': 'round', 'line-join': 'round' },
+                        paint: { 'line-color': '#fb923c', 'line-width': 4.5 }
+                    },
+                    // ۵. متن نام خیابان‌ها و بزرگراه‌ها
+                    {
+                        id: 'roads_labels',
+                        type: 'symbol',
+                        source: 'base_tiles',
+                        'source-layer': 'roads',
+                        filter: ['has', 'name'],
+                        layout: {
+                            'symbol-placement': 'line',
+                            'text-field': ['get', 'name'],
+                            'text-size': 12,
+                            'text-font': ['Noto Sans Regular'],
+                            'text-max-angle': 40,
+                            'symbol-spacing': 250
+                        },
+                        paint: {
+                            'text-color': '#0f172a',
+                            'text-halo-color': '#ffffff',
+                            'text-halo-width': 2.5
+                        }
+                    }
+                ]
+            }
+        });
+
+        map.on('error', (e) => {
+            if (e.error) console.error("Map Error Details:", e.error.message);
+        });
+    </script>
+</body>
+</html>

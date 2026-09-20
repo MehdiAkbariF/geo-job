@@ -1,5 +1,22 @@
+# Rust Build Artifacts
 /target
 Cargo.lock
 **/*.rs.bk
+
+# Geospatial Large Data Files & Dumps (Never commit to Git)
+/data/
+*.osm.pbf
+*.pbf
+*.pmtiles
+*.mbtiles
+*.geojson
+*.shp
+*.sql.gz
+
+# Environment & Credentials
 *.env
+.env.*
+
+# OS Metadata
 .DS_Store
+Thumbs.db

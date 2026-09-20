@@ -10,6 +10,7 @@ const DEFAULT_BBOX_LIMIT: usize = 200;
 #[derive(Debug, Clone)]
 pub struct BBoxSearchOptions {
     pub limit: Option<usize>,
+    pub source: Option<String>,
 }
 
 pub async fn find_locations_in_bbox(
@@ -25,9 +26,7 @@ pub async fn find_locations_in_bbox(
         });
     }
 
-    // Coordinates order in PostGIS ST_MakeEnvelope: (xmin, ymin, xmax, ymax, srid)
-    // Corresponding to: (west, south, east, north, 4326)
-    // The && operator checks bounding box overlap using the GiST index.
+    // Filters out background OSM data by default so only employer-posted opportunities become markers.
     let sql = r#"
         SELECT 
             id,
@@ -42,6 +41,10 @@ pub async fn find_locations_in_bbox(
             updated_at
         FROM locations
         WHERE coordinates && ST_MakeEnvelope($1, $2, $3, $4, 4326)
+          AND (
+              ($6::text IS NOT NULL AND source = $6)
+              OR ($6::text IS NULL AND source != 'osm')
+          )
         LIMIT $5
     "#;
 
@@ -51,6 +54,7 @@ pub async fn find_locations_in_bbox(
         .bind(bbox.east())
         .bind(bbox.north())
         .bind(limit as i64)
+        .bind(options.source)
         .fetch_all(pool)
         .await?;
 

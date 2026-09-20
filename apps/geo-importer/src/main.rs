@@ -5,8 +5,10 @@ mod pipeline;
 
 use clap::Parser;
 use cli::CliArgs;
+use error::ImporterError;
 use geo_storage::{create_connection_pool, run_migrations, DatabaseConfig};
-use pipeline::{insert_osm_batch, seed_sample_locations};
+use osm_parser::{ExtractedOsmPoint, ExtractedOsmRoad};
+use pipeline::{insert_osm_batch, insert_roads_batch};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -36,29 +38,71 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pool = create_connection_pool(&db_config).await?;
     run_migrations(&pool).await?;
 
-    if args.seed_samples {
-        tracing::info!("Seeding initial sample locations...");
-        seed_sample_locations(&pool).await?;
-        tracing::info!("Seeding completed successfully.");
-    }
-
     if let Some(pbf_path) = args.file {
-        tracing::info!("Starting streaming import from OSM PBF: {:?}", pbf_path);
-        let rt = tokio::runtime::Handle::current();
+        tracing::info!("Processing real OSM data from PBF: {:?}", pbf_path);
 
-        let total = osm_parser::stream_osm_pbf(
-            &pbf_path,
-            |batch| {
-                let pool_ref = pool.clone();
-                rt.block_on(async move {
-                    insert_osm_batch(&pool_ref, &batch).await
-                })?;
-                Ok(())
-            },
-            args.batch_size,
-        )?;
+        let (points_tx, mut points_rx) = tokio::sync::mpsc::channel::<Vec<ExtractedOsmPoint>>(16);
+        let (roads_tx, mut roads_rx) = tokio::sync::mpsc::channel::<Vec<ExtractedOsmRoad>>(16);
+        let batch_size = args.batch_size;
 
-        tracing::info!("Streaming import finished! Total locations ingested: {}", total);
+        // Producer Thread: Streaming parse of actual nodes and ways
+        let producer_handle = tokio::task::spawn_blocking(move || {
+            osm_parser::stream_osm_pbf_full(
+                &pbf_path,
+                |batch| {
+                    if points_tx.blocking_send(batch).is_err() {
+                        return Err(ImporterError::Validation("Points channel closed".into()));
+                    }
+                    Ok(())
+                },
+                |batch| {
+                    if roads_tx.blocking_send(batch).is_err() {
+                        return Err(ImporterError::Validation("Roads channel closed".into()));
+                    }
+                    Ok(())
+                },
+                batch_size,
+            )
+        });
+
+        // Consumers: Concurrently write real points and real road centerlines
+        let pool_for_points = pool.clone();
+        let points_consumer = tokio::spawn(async move {
+            let mut count = 0;
+            while let Some(batch) = points_rx.recv().await {
+                let len = batch.len();
+                let _ = insert_osm_batch(&pool_for_points, &batch).await;
+                count += len;
+                if count % 20000 == 0 {
+                    tracing::info!("Imported {} real place/amenity locations...", count);
+                }
+            }
+            count
+        });
+
+        let pool_for_roads = pool.clone();
+        let roads_consumer = tokio::spawn(async move {
+            let mut count = 0;
+            while let Some(batch) = roads_rx.recv().await {
+                let len = batch.len();
+                let _ = insert_roads_batch(&pool_for_roads, &batch).await;
+                count += len;
+                if count % 10000 == 0 {
+                    tracing::info!("Imported {} real road linestrings...", count);
+                }
+            }
+            count
+        });
+
+        let _ = producer_handle.await??;
+        let total_points = points_consumer.await?;
+        let total_roads = roads_consumer.await?;
+
+        tracing::info!(
+            "REAL DATA IMPORT COMPLETED! Successfully ingested {} real locations and {} real road centerlines directly into PostGIS.",
+            total_points,
+            total_roads
+        );
     }
 
     Ok(())

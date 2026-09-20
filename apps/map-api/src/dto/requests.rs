@@ -1,14 +1,14 @@
 use crate::error::ApiError;
 use geo_domain::LocationPrecision;
 use geo_types::{BoundingBox, GeoPoint, Radius};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct BBoxQueryParams {
-    /// Format: "west,south,east,north"
     pub bbox: String,
     pub zoom: Option<u8>,
     pub limit: Option<usize>,
+    pub source: Option<String>,
 }
 
 impl BBoxQueryParams {

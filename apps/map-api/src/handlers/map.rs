@@ -10,9 +10,6 @@ use geo_presentation::{ClusterFeature, FeatureCollection, LocationProperties, Ma
 use geo_query::{bbox_query::BBoxSearchOptions, cluster_locations_in_bbox, find_locations_in_bbox, find_locations_within_radius};
 use serde_json::Value;
 
-/// Viewport-based map search with Zoom-awareness:
-/// - Low zoom levels (< 11): Returns aggregated spatial clusters to protect client FPS.
-/// - High zoom levels (>= 11): Returns discrete GeoJSON Point features.
 pub async fn search_viewport(
     State(state): State<AppState>,
     Query(params): Query<BBoxQueryParams>,
@@ -21,7 +18,6 @@ pub async fn search_viewport(
     let zoom = params.zoom.unwrap_or(12);
 
     if zoom < 11 {
-        // Compute adaptive grid cell size in degrees based on zoom level
         let grid_size = match zoom {
             0..=5 => 1.0,
             6..=8 => 0.25,
@@ -33,7 +29,10 @@ pub async fn search_viewport(
         let collection = FeatureCollection::new(cluster_features);
         Ok(Json(serde_json::to_value(collection).unwrap()))
     } else {
-        let options = BBoxSearchOptions { limit: params.limit };
+        let options = BBoxSearchOptions {
+            limit: params.limit,
+            source: params.source,
+        };
         let locations = find_locations_in_bbox(&state.pool, &bbox, options).await?;
         let features: Vec<MapFeature<LocationProperties>> = locations.into_iter().map(MapFeature::from).collect();
         let collection = FeatureCollection::new(features);
@@ -41,7 +40,6 @@ pub async fn search_viewport(
     }
 }
 
-/// Geodesic radius search returning locations with distance in meters.
 pub async fn search_nearby(
     State(state): State<AppState>,
     Query(params): Query<NearbyQueryParams>,

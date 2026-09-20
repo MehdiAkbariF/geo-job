@@ -47,8 +47,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/v1/map/features", get(handlers::map::search_viewport))
         .route("/api/v1/map/nearby", get(handlers::map::search_nearby))
         .route("/api/v1/locations", post(handlers::locations::create_location))
-        .route("/api/v1/tiles/:z/:x/:y.mvt", get(handlers::tiles::serve_vector_tile))
-        // New Endpoints: Reverse Geocoding & Administrative Areas
+        .route("/api/v1/tiles/:z/:x/:tile", get(handlers::tiles::serve_vector_tile))
+        .route("/api/v1/base-tiles/:z/:x/:tile", get(handlers::tiles::serve_base_map_tile))
         .route("/api/v1/reverse-geocoding", get(handlers::geocoding::reverse_geocode_handler))
         .route("/api/v1/admin/areas", get(handlers::geocoding::list_admin_areas_handler))
         .layer(

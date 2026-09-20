@@ -14,8 +14,8 @@ struct ClusterDbRow {
     north: f64,
 }
 
-/// Aggregates locations within a bounding box into spatial clusters directly inside PostGIS.
-/// `grid_size` is specified in degrees (e.g. 0.05 for medium zoom, 0.2 for low zoom).
+/// Aggregates only employer opportunities within a bounding box.
+/// OSM background points are strictly excluded.
 pub async fn cluster_locations_in_bbox(
     pool: &PgPool,
     bbox: &BoundingBox,
@@ -32,6 +32,7 @@ pub async fn cluster_locations_in_bbox(
             ST_YMax(ST_Extent(coordinates::geometry)) AS north
         FROM locations
         WHERE coordinates && ST_MakeEnvelope($1, $2, $3, $4, 4326)
+          AND source = 'opportunity'
         GROUP BY ST_SnapToGrid(coordinates, $5)
         HAVING COUNT(*) > 1
     "#;
