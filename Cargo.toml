@@ -8,6 +8,9 @@ members = [
     "crates/geo-presentation",
     "crates/geo-tiles",
     "crates/geo-geocoding",
+    "crates/biz-domain",
+    "crates/biz-storage",
+    "crates/biz-application",
     "apps/map-api",
     "apps/geo-importer",
 ]
@@ -15,7 +18,7 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-authors = ["Geospatial Core Team"]
+authors = ["Core Platform Team"]
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
@@ -32,3 +35,7 @@ axum = { version = "0.7", features = ["macros"] }
 tower = { version = "0.4" }
 tower-http = { version = "0.5", features = ["cors", "trace"] }
 clap = { version = "4.5", features = ["derive"] }
+argon2 = "0.5"
+jsonwebtoken = "9.3"
+rand = "0.8"
+sha2 = "0.10"

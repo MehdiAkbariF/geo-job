@@ -23,7 +23,7 @@ pub struct AreaBreadcrumb {
     pub name: String,
 }
 
-/// Structured, machine-readable Reverse Geocoding result.
+/// Fully structured 4-tier Reverse Geocoding model (City, Neighborhood, Street, POI)
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ReverseGeocodeResult {
     pub formatted_address: String,
@@ -33,5 +33,7 @@ pub struct ReverseGeocodeResult {
     pub district: Option<String>,
     pub city: Option<String>,
     pub neighborhood: Option<String>,
+    pub street: Option<String>,
+    pub poi: Option<String>,
     pub hierarchy: Vec<AreaBreadcrumb>,
 }

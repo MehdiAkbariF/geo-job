@@ -1,0 +1,20 @@
+[package]
+name = "biz-storage"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+biz-domain = { path = "../biz-domain" }
+sqlx.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+argon2.workspace = true
+jsonwebtoken.workspace = true
+rand.workspace = true
+sha2.workspace = true
+serde.workspace = true

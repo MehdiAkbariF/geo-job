@@ -1,0 +1,15 @@
+[package]
+name = "biz-application"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+biz-domain = { path = "../biz-domain" }
+biz-storage = { path = "../biz-storage" }
+serde.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

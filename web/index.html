@@ -3,53 +3,162 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>نقشه برداری با نام فارسی معابر (PostGIS)</title>
+    <title>میز کار تست پلتفرم مکانی (Rust + PostGIS)</title>
     
+    <!-- MapLibre GL JS -->
     <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
     <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
 
     <style>
-        body { margin: 0; padding: 0; font-family: Tahoma, sans-serif; background: #f8fafc; }
+        body { margin: 0; padding: 0; font-family: Tahoma, sans-serif; background: #0f172a; }
         #map { width: 100vw; height: 100vh; }
-        .info-panel {
+        
+        /* پنل ابزار تست */
+        .workbench {
             position: absolute;
-            top: 20px;
-            right: 20px;
+            top: 15px;
+            right: 15px;
             z-index: 10;
             background: white;
-            padding: 16px 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            max-width: 320px;
+            padding: 16px;
+            border-radius: 10px;
+            box-shadow: 0 4px 25px rgba(0,0,0,0.2);
+            width: 330px;
+            max-height: 92vh;
+            overflow-y: auto;
             font-size: 13px;
             line-height: 1.6;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #cbd5e1;
         }
-        .badge {
+        .tab-bar {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+        .tab-btn {
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            padding: 6px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            font-family: inherit;
+        }
+        .tab-btn.active {
             background: #2563eb;
             color: white;
-            padding: 3px 8px;
-            border-radius: 4px;
+            border-color: #2563eb;
+            font-weight: bold;
+        }
+        .tab-content {
+            display: none;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 10px;
+        }
+        .tab-content.active { display: block; }
+        .btn-action {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: bold;
+            font-family: inherit;
+            margin-top: 8px;
+        }
+        .btn-action:hover { background: #1d4ed8; }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            margin-top: 4px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-family: inherit;
+            font-size: 12px;
+        }
+        .badge-health {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
             font-size: 11px;
             font-weight: bold;
+        }
+        .health-ok { background: #dcfce7; color: #15803d; }
+        .health-err { background: #fee2e2; color: #b91c1c; }
+        .result-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 8px;
+            font-size: 12px;
+            word-break: break-word;
         }
     </style>
 </head>
 <body>
 
-    <div class="info-panel">
-        <span class="badge">پلتفرم برداری PostGIS + نام معابر</span>
-        <h4 style="margin: 8px 0 6px 0; color: #0f172a;">نقشه پایه شهری</h4>
-        <div>• خطوط معابر و نام فارسی خیابان‌ها فعال هستند.</div>
-        <div id="status" style="margin-top: 8px; color: #059669; font-weight: bold;">در حال نمایش...</div>
+    <div class="workbench">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3 style="margin: 0; color: #0f172a; font-size: 14px;">Geospatial Platform</h3>
+            <span id="health-badge" class="badge-health health-ok">سرور فعال</span>
+        </div>
+
+        <div class="tab-bar">
+            <button class="tab-btn active" onclick="setTab('reverse')">آدرس معکوس</button>
+            <button class="tab-btn" onclick="setTab('nearby')">جستجوی شعاعی</button>
+            <button class="tab-btn" onclick="setTab('create')">ثبت آگهی کارفرما</button>
+            <button class="tab-btn" onclick="setTab('viewport')">دیدگاه نقشه</button>
+        </div>
+
+        <!-- تب ۱: آدرس‌یابی معکوس -->
+        <div id="panel-reverse" class="tab-content active">
+            <b>آدرس‌یابی معکوس (Reverse Geocoding):</b>
+            <div style="color: #64748b; font-size: 11px;">روی هر کجای نقشه کلیک کنید تا آدرس محله و شهر استخراج شود.</div>
+            <div id="reverse-output" class="result-box">روی نقشه کلیک کنید...</div>
+        </div>
+
+        <!-- تب ۲: جستجوی شعاعی -->
+        <div id="panel-nearby" class="tab-content">
+            <b>جستجوی شعاعی (Nearby Search):</b>
+            <label style="font-size: 11px; color: #475569;">شعاع جستجو به متر:</label>
+            <input type="number" id="radius-input" value="3000" step="500" min="500" max="25000" />
+            <div style="color: #64748b; font-size: 11px; margin-top: 4px;">روی نقشه کلیک کنید تا مرکز شعاع مشخص شده و جستجو انجام شود.</div>
+            <div id="nearby-output" class="result-box">مرکز شعاع را مشخص کنید...</div>
+        </div>
+
+        <!-- تب ۳: ثبت موقعیت کارفرما -->
+        <div id="panel-create" class="tab-content">
+            <b>ثبت فرصت شغلی کارفرما (API):</b>
+            <label style="font-size: 11px; color: #475569;">عنوان فرصت شغلی:</label>
+            <input type="text" id="job-title" placeholder="مثال: مهندس ارشد Rust - دیجی‌کالا" />
+            <label style="font-size: 11px; color: #475569; margin-top: 6px; display: block;">مختصات:</label>
+            <input type="text" id="job-coords" readonly placeholder="برای انتخاب مختصات، روی نقشه کلیک کنید" />
+            <button class="btn-action" onclick="submitOpportunity()">ثبت در PostGIS</button>
+            <div id="create-output" class="result-box" style="display: none;"></div>
+        </div>
+
+        <!-- تب ۴: دیدگاه نقشه -->
+        <div id="panel-viewport" class="tab-content">
+            <b>جستجوی دیدگاه (Viewport Features):</b>
+            <div style="color: #64748b; font-size: 11px;">با هر حرکت نقشه، فرصت‌های همان کادر لود می‌شوند.</div>
+            <button class="btn-action" onclick="fetchViewportOpportunities()" style="background: #475569;">بروزرسانی محدوده</button>
+            <div id="viewport-output" class="result-box" style="color: #2563eb; font-weight: bold;">تعداد مارکرهای کارفرمایان: 0</div>
+        </div>
     </div>
 
     <div id="map"></div>
 
     <script>
         const API_BASE = "http://localhost:8080";
+        let activeTab = 'reverse';
+        let selectedCoords = null;
 
-        // پلاگین حروف راست‌به‌چپ فارسی
+        // پلاگین راست‌به‌چپ برای زبان فارسی
         if (maplibregl.getRTLTextPluginStatus() === 'unavailable') {
             maplibregl.setRTLTextPlugin(
                 'https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.min.js',
@@ -58,6 +167,7 @@
             );
         }
 
+        // نقشه برداری با کنتراست بالا و متمایز (High-Contrast Light Theme)
         const map = new maplibregl.Map({
             container: 'map',
             center: [51.39, 35.72],
@@ -67,7 +177,6 @@
             localFontFamily: 'Tahoma, "Segoe UI", Arial, sans-serif',
             style: {
                 version: 8,
-                // سرور باینری رسمی فونت با ساپورت یونیکد فارسی
                 glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
                 sources: {
                     'base_tiles': {
@@ -75,16 +184,44 @@
                         tiles: [`${API_BASE}/api/v1/base-tiles/{z}/{x}/{y}.mvt`],
                         minzoom: 4,
                         maxzoom: 18
+                    },
+                    'opportunities': {
+                        type: 'geojson',
+                        data: { type: 'FeatureCollection', features: [] }
+                    },
+                    'nearby_circle': {
+                        type: 'geojson',
+                        data: { type: 'FeatureCollection', features: [] }
                     }
                 },
                 layers: [
-                    // ۱. رنگ زمینه شهری
+                    // ۱. رنگ پس‌زمینه شهری ملایم
                     {
                         id: 'background',
                         type: 'background',
-                        paint: { 'background-color': '#f8fafc' }
+                        paint: { 'background-color': '#e2e8f0' }
                     },
-                    // ۲. معابر فرعی
+                    // ۲. دایره محدوده جستجوی شعاعی
+                    {
+                        id: 'nearby_circle_fill',
+                        type: 'fill',
+                        source: 'nearby_circle',
+                        paint: {
+                            'fill-color': '#38bdf8',
+                            'fill-opacity': 0.25
+                        }
+                    },
+                    {
+                        id: 'nearby_circle_line',
+                        type: 'line',
+                        source: 'nearby_circle',
+                        paint: {
+                            'line-color': '#0284c7',
+                            'line-width': 2,
+                            'line-dasharray': [3, 3]
+                        }
+                    },
+                    // ۳. خیابان‌های فرعی و کوچه‌ها (کنتراست سفید خالص با حاشیه تیره مشخص)
                     {
                         id: 'roads_minor_casing',
                         type: 'line',
@@ -92,7 +229,10 @@
                         'source-layer': 'roads',
                         filter: ['!in', 'highway', 'motorway', 'trunk', 'primary', 'secondary'],
                         layout: { 'line-cap': 'round', 'line-join': 'round' },
-                        paint: { 'line-color': '#cbd5e1', 'line-width': 2.2 }
+                        paint: {
+                            'line-color': '#94a3b8',
+                            'line-width': 3.0
+                        }
                     },
                     {
                         id: 'roads_minor',
@@ -101,9 +241,12 @@
                         'source-layer': 'roads',
                         filter: ['!in', 'highway', 'motorway', 'trunk', 'primary', 'secondary'],
                         layout: { 'line-cap': 'round', 'line-join': 'round' },
-                        paint: { 'line-color': '#ffffff', 'line-width': 1.6 }
+                        paint: {
+                            'line-color': '#ffffff',
+                            'line-width': 2.0
+                        }
                     },
-                    // ۳. خیابان‌های اصلی
+                    // ۴. خیابان‌های اصلی و شریانی (رنگ زرد طلایی برجسته)
                     {
                         id: 'roads_primary_casing',
                         type: 'line',
@@ -111,7 +254,10 @@
                         'source-layer': 'roads',
                         filter: ['in', 'highway', 'primary', 'secondary', 'primary_link'],
                         layout: { 'line-cap': 'round', 'line-join': 'round' },
-                        paint: { 'line-color': '#fde047', 'line-width': 4.5 }
+                        paint: {
+                            'line-color': '#ca8a04',
+                            'line-width': 5.5
+                        }
                     },
                     {
                         id: 'roads_primary',
@@ -120,9 +266,12 @@
                         'source-layer': 'roads',
                         filter: ['in', 'highway', 'primary', 'secondary', 'primary_link'],
                         layout: { 'line-cap': 'round', 'line-join': 'round' },
-                        paint: { 'line-color': '#fef08a', 'line-width': 3.2 }
+                        paint: {
+                            'line-color': '#fde047',
+                            'line-width': 4.0
+                        }
                     },
-                    // ۴. بزرگراه‌ها
+                    // ۵. بزرگراه‌ها و آزادراه‌ها (رنگ نارنجی تند و چشم‌نواز)
                     {
                         id: 'roads_motorway_casing',
                         type: 'line',
@@ -130,7 +279,10 @@
                         'source-layer': 'roads',
                         filter: ['in', 'highway', 'motorway', 'trunk', 'motorway_link', 'trunk_link'],
                         layout: { 'line-cap': 'round', 'line-join': 'round' },
-                        paint: { 'line-color': '#ea580c', 'line-width': 6.0 }
+                        paint: {
+                            'line-color': '#9a3412',
+                            'line-width': 7.5
+                        }
                     },
                     {
                         id: 'roads_motorway',
@@ -139,9 +291,12 @@
                         'source-layer': 'roads',
                         filter: ['in', 'highway', 'motorway', 'trunk', 'motorway_link', 'trunk_link'],
                         layout: { 'line-cap': 'round', 'line-join': 'round' },
-                        paint: { 'line-color': '#fb923c', 'line-width': 4.5 }
+                        paint: {
+                            'line-color': '#ea580c',
+                            'line-width': 5.5
+                        }
                     },
-                    // ۵. متن نام خیابان‌ها و بزرگراه‌ها
+                    // ۶. نام کامل فارسی معابر با حاشیه سفید بولد
                     {
                         id: 'roads_labels',
                         type: 'symbol',
@@ -159,15 +314,191 @@
                         paint: {
                             'text-color': '#0f172a',
                             'text-halo-color': '#ffffff',
-                            'text-halo-width': 2.5
+                            'text-halo-width': 3.0
+                        }
+                    },
+                    // ۷. مارکرهای واقعی فرصت‌های شغلی کارفرمایان
+                    {
+                        id: 'employer_markers',
+                        type: 'circle',
+                        source: 'opportunities',
+                        paint: {
+                            'circle-radius': 9,
+                            'circle-color': '#dc2626',
+                            'circle-stroke-width': 2.5,
+                            'circle-stroke-color': '#ffffff'
                         }
                     }
                 ]
             }
         });
 
-        map.on('error', (e) => {
-            if (e.error) console.error("Map Error Details:", e.error.message);
+        // تغییر تب‌ها
+        function setTab(tabId) {
+            activeTab = tabId;
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById(`panel-${tabId}`).classList.add('active');
+        }
+
+        // بررسی سلامت سرور
+        async function checkHealth() {
+            try {
+                const res = await fetch(`${API_BASE}/healthz`);
+                const badge = document.getElementById('health-badge');
+                if (res.ok) {
+                    badge.innerText = 'سرور متصل است';
+                    badge.className = 'badge-health health-ok';
+                } else {
+                    badge.innerText = 'خطای اتصال';
+                    badge.className = 'badge-health health-err';
+                }
+            } catch (e) {
+                const badge = document.getElementById('health-badge');
+                badge.innerText = 'سرور خاموش است';
+                badge.className = 'badge-health health-err';
+            }
+        }
+        setInterval(checkHealth, 8000);
+        checkHealth();
+
+        // مدیریت رویداد کلیک روی نقشه متناسب با تب فعال
+        map.on('click', async (e) => {
+            const { lng, lat } = e.lngLat;
+            selectedCoords = [lng, lat];
+
+            if (activeTab === 'reverse') {
+                document.getElementById('reverse-output').innerText = 'در حال استخراج آدرس...';
+                try {
+                    const res = await fetch(`${API_BASE}/api/v1/reverse-geocoding?lat=${lat}&lon=${lng}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        document.getElementById('reverse-output').innerHTML = `
+                            <b>آدرس استخراج‌شده:</b><br>${data.formatted_address}<br>
+                            <small>استان: ${data.province || '-'} | شهر: ${data.city || '-'} | محله: ${data.neighborhood || '-'}</small>
+                        `;
+                        new maplibregl.Popup().setLngLat([lng, lat]).setHTML(`<b>${data.formatted_address}</b>`).addTo(map);
+                    } else {
+                        document.getElementById('reverse-output').innerText = 'این نقطه درون مرز اداری ثبت‌شده‌ای نیست.';
+                    }
+                } catch (err) {
+                    document.getElementById('reverse-output').innerText = 'خطا در ارتباط با سرور';
+                }
+            } else if (activeTab === 'nearby') {
+                const radius = parseInt(document.getElementById('radius-input').value, 10);
+                drawNearbyCircle(lng, lat, radius);
+                document.getElementById('nearby-output').innerText = 'در حال جستجوی فرصت‌های نزدیک...';
+                try {
+                    const res = await fetch(`${API_BASE}/api/v1/map/nearby?lat=${lat}&lon=${lng}&radius=${radius}`);
+                    if (res.ok) {
+                        const geojson = await res.json();
+                        const count = geojson.features ? geojson.features.length : 0;
+                        document.getElementById('nearby-output').innerHTML = `<b>تعداد فرصت‌های یافت‌شده:</b> ${count} مورد`;
+                    }
+                } catch (err) {
+                    document.getElementById('nearby-output').innerText = 'خطا در سرور';
+                }
+            } else if (activeTab === 'create') {
+                document.getElementById('job-coords').value = `${lng.toFixed(6)}, ${lat.toFixed(6)}`;
+            }
+        });
+
+        // رسم دایره شعاعی بر روی نقشه
+        function drawNearbyCircle(lng, lat, radiusInMeters) {
+            const points = 64;
+            const km = radiusInMeters / 1000;
+            const coords = [];
+            const distanceX = km / (111.320 * Math.cos(lat * Math.PI / 180));
+            const distanceY = km / 110.574;
+
+            for (let i = 0; i < points; i++) {
+                const theta = (i / points) * (2 * Math.PI);
+                const x = distanceX * Math.cos(theta);
+                const y = distanceY * Math.sin(theta);
+                coords.push([lng + x, lat + y]);
+            }
+            coords.push(coords[0]);
+
+            map.getSource('nearby_circle').setData({
+                type: 'FeatureCollection',
+                features: [{
+                    type: 'Feature',
+                    geometry: { type: 'Polygon', coordinates: [coords] }
+                }]
+            });
+        }
+
+        // ثبت فرصت شغلی جدید توسط کارفرما از طریق POST /api/v1/locations
+        async function submitOpportunity() {
+            const title = document.getElementById('job-title').value.trim();
+            if (!title) return alert('لطفاً عنوان فرصت شغلی را وارد کنید.');
+            if (!selectedCoords) return alert('لطفاً ابتدا روی نقشه کلیک کنید تا مختصات انتخاب شود.');
+
+            const payload = {
+                longitude: selectedCoords[0],
+                latitude: selectedCoords[1],
+                address_summary: title,
+                precision: "exact",
+                source: "opportunity"
+            };
+
+            const out = document.getElementById('create-output');
+            out.style.display = 'block';
+            out.innerText = 'در حال ثبت در PostGIS...';
+
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/locations`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    out.innerHTML = `<span style="color: #16a34a; font-weight: bold;">ثبت شد!</span><br><small>شناسه: ${data.id}</small>`;
+                    document.getElementById('job-title').value = '';
+                    fetchViewportOpportunities();
+                    new maplibregl.Popup()
+                        .setLngLat(selectedCoords)
+                        .setHTML(`<b>فرصت ثبت شد:</b><br>${title}`)
+                        .addTo(map);
+                } else {
+                    out.innerText = 'خطا در ثبت فرصت';
+                }
+            } catch (err) {
+                out.innerText = 'خطا در شبکه';
+            }
+        }
+
+        // بارگذاری مارکرهای ثبت‌شده کارفرمایان در کادر دیدگاه
+        async function fetchViewportOpportunities() {
+            const bounds = map.getBounds();
+            const bboxStr = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
+            const zoom = Math.round(map.getZoom());
+
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/map/features?bbox=${bboxStr}&zoom=${zoom}&source=opportunity`);
+                if (res.ok) {
+                    const geojson = await res.json();
+                    map.getSource('opportunities').setData(geojson);
+                    const count = geojson.features ? geojson.features.length : 0;
+                    document.getElementById('viewport-output').innerText = `مارکرهای کارفرمایان: ${count} مورد`;
+                }
+            } catch (e) {}
+        }
+
+        map.on('moveend', fetchViewportOpportunities);
+        map.on('load', fetchViewportOpportunities);
+
+        // پاپ‌آپ هنگام کلیک روی مارکرهای قرمز کارفرما
+        map.on('click', 'employer_markers', (e) => {
+            const coords = e.features[0].geometry.coordinates.slice();
+            const title = e.features[0].properties.address_summary || 'فرصت شغلی';
+            new maplibregl.Popup()
+                .setLngLat(coords)
+                .setHTML(`<b style="color: #dc2626;">فرصت شغلی کارفرما:</b><br>${title}`)
+                .addTo(map);
         });
     </script>
 </body>
