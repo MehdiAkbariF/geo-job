@@ -3,6 +3,7 @@ pub mod candidate;
 pub mod company;
 pub mod discovery;
 pub mod error;
+pub mod governance;
 pub mod identity;
 pub mod opportunity;
 pub mod saved;
@@ -13,6 +14,7 @@ pub use candidate::{Candidate, CandidateEducation, CandidateExperience, Candidat
 pub use company::{Company, CompanyMembership, CompanyRole, CompanyVerificationStatus, NewCompany};
 pub use discovery::{CompanySummary, OpportunitySearchResult, SearchPageResult, SearchQuery, SortBy};
 pub use error::DomainError;
+pub use governance::{AdminRole, AuditLog, ModerationCase, Report, VerificationStatus};
 pub use identity::{Email, NewUser, RawPassword, User, UserStatus};
 pub use opportunity::{NewOpportunity, Opportunity, OpportunityStatus, OpportunityType, RemoteScope, Salary, WorkplaceType};
 pub use saved::{CandidatePreferences, SavedCompany, SavedOpportunity, SavedSearch};
