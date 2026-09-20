@@ -1,9 +1,10 @@
 use crate::error::DomainError;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// Exact frozen Verification lifecycle (Section 55 of MASTER PROMPT 03).
 /// NOT_STARTED -> PENDING -> UNDER_REVIEW -> (VERIFIED / REJECTED) -> EXPIRED
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum VerificationStatus {
     NotStarted,

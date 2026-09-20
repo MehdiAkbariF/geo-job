@@ -2,7 +2,10 @@ use utoipa::OpenApi;
 
 use crate::handlers::auth::RefreshTokenRequest;
 use crate::handlers::taxonomy::SkillQuery;
-use biz_application::application::{ApplicationDto, ChangeApplicationStatusCommand, SubmitApplicationCommand};
+use biz_application::application::{
+    ApplicationDossierDto, ApplicationDto, ChangeApplicationStatusCommand,
+    SubmitApplicationCommand,
+};
 use biz_application::candidate::{
     AddExperienceCommand, CandidatePreferencesDto, CandidateProfileDto, ExperienceDto,
     SetSkillsCommand, TrackedApplicationDto, UpdateProfileCommand,
@@ -11,12 +14,16 @@ use biz_application::company::{
     AddCompanyLocationCommand, AddMemberCommand, CompanyDto, CompanyMemberDto,
     CreateCompanyCommand, UpdateCompanyCommand,
 };
-use biz_application::governance::CreateReportCommand;
+use biz_application::governance::{
+    CompanyVerificationDto, CreateReportCommand, ReviewVerificationCommand,
+    SubmitVerificationCommand,
+};
 use biz_application::identity::{AuthResponseDto, LoginCommand, RegisterCommand};
 use biz_application::opportunity::CreateOpportunityCommand;
 use biz_application::saved::SaveSearchCommand;
 
 use biz_domain::application::{Application, ApplicationStatus};
+use biz_domain::governance::{Report, VerificationStatus};
 use biz_domain::opportunity::{Opportunity, OpportunityStatus, OpportunityType, RemoteScope, Salary, WorkplaceType};
 use biz_domain::taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skill};
 
@@ -54,6 +61,7 @@ use biz_domain::taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skil
         // Discovery & Details
         crate::handlers::discovery::search_opportunities_handler,
         crate::handlers::opportunity::get_opportunity_handler,
+        crate::handlers::opportunity::track_opportunity_click_handler,
 
         // Opportunities Lifecycle
         crate::handlers::opportunity::create_opportunity_handler,
@@ -62,8 +70,9 @@ use biz_domain::taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skil
         crate::handlers::opportunity::resume_opportunity_handler,
         crate::handlers::opportunity::close_opportunity_handler,
 
-        // Applications
+        // Applications & Employer ATS Dossier
         crate::handlers::application::submit_application_handler,
+        crate::handlers::application::get_application_dossier_handler,
         crate::handlers::application::change_application_status_handler,
 
         // Saved Items
@@ -82,8 +91,12 @@ use biz_domain::taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skil
         crate::handlers::taxonomy::list_occupations_handler,
         crate::handlers::taxonomy::resolve_skill_handler,
 
-        // Governance
-        crate::handlers::governance::report_opportunity_handler
+        // Governance & Trust
+        crate::handlers::governance::report_opportunity_handler,
+        crate::handlers::governance::submit_verification_handler,
+        crate::handlers::governance::list_pending_verifications_handler,
+        crate::handlers::governance::review_verification_handler,
+        crate::handlers::governance::list_reports_handler
     ),
     components(
         schemas(
@@ -110,8 +123,14 @@ use biz_domain::taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skil
             ApplicationDto,
             Application,
             ApplicationStatus,
+            ApplicationDossierDto,
             SaveSearchCommand,
             CreateReportCommand,
+            SubmitVerificationCommand,
+            ReviewVerificationCommand,
+            CompanyVerificationDto,
+            VerificationStatus,
+            Report,
             Opportunity,
             OpportunityType,
             WorkplaceType,
@@ -129,13 +148,13 @@ use biz_domain::taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skil
         (name = "Auth", description = "Authentication, tokens & sessions"),
         (name = "Candidate Profile", description = "Talent profile, experiences, skills & application tracking"),
         (name = "Companies", description = "Company profile, branch locations & team membership"),
-        (name = "Employer ATS", description = "Applicant tracking system & opportunity pipeline for hiring teams"),
+        (name = "Employer ATS", description = "Applicant tracking system, dossiers & opportunity pipeline"),
         (name = "Opportunities", description = "Opportunity lifecycle management (Draft, Publish, Pause, Close)"),
         (name = "Discovery", description = "Search & Discovery orchestration"),
         (name = "Taxonomies", description = "Standard industries, job categories, occupations & skills autocomplete"),
         (name = "Applications", description = "Candidate job applications pipeline"),
         (name = "Saved", description = "Saved opportunities, companies & searches"),
-        (name = "Governance", description = "Reports & platform governance")
+        (name = "Governance & Trust", description = "Platform trust, company legal verifications & moderation reports")
     )
 )]
 pub struct ApiDoc;

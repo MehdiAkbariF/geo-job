@@ -1,3 +1,5 @@
+use crate::candidate::CandidateProfileDto;
+use biz_domain::application::Application;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -22,4 +24,10 @@ pub struct ApplicationDto {
     pub candidate_id: Uuid,
     pub opportunity_id: Uuid,
     pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApplicationDossierDto {
+    pub application: Application,
+    pub candidate_profile: CandidateProfileDto,
 }

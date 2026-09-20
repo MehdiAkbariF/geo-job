@@ -1,9 +1,8 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-/// Platform administration roles (Section 46, 62 & 109).
-/// Distinct from CompanyMembership roles.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum AdminRole {
     Admin,
@@ -38,8 +37,7 @@ impl AdminRole {
     }
 }
 
-/// Report is an allegation, not a decision (Section 44 & 58)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Report {
     pub id: Uuid,
     pub reporter_user_id: Option<Uuid>,
@@ -48,13 +46,12 @@ pub struct Report {
     pub details: Option<String>,
 }
 
-/// ModerationCase represents the actual review process (Section 44 & 59)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ModerationCase {
     pub id: Uuid,
     pub opportunity_id: Uuid,
     pub status: String,
     pub assigned_moderator_id: Option<Uuid>,
     pub action_taken: String,
-    pub internal_notes: Option<String>, // Staff-only private notes
+    pub internal_notes: Option<String>,
 }

@@ -1,4 +1,8 @@
-use super::dto::{ApplicationDto, ChangeApplicationStatusCommand, SubmitApplicationCommand};
+use super::dto::{
+    ApplicationDossierDto, ApplicationDto, ChangeApplicationStatusCommand,
+    SubmitApplicationCommand,
+};
+use crate::candidate::CandidateUseCases;
 use crate::error::ApplicationError;
 use biz_domain::application::{Application, ApplicationStatus, NewApplication};
 use biz_domain::opportunity::OpportunityStatus;
@@ -125,5 +129,33 @@ impl ApplicationUseCases {
 
         let list = self.app_repo.list_by_opportunity(opportunity_id).await?;
         Ok(list)
+    }
+
+    pub async fn get_application_dossier(
+        &self,
+        actor_user_id: Uuid,
+        application_id: Uuid,
+    ) -> Result<ApplicationDossierDto, ApplicationError> {
+        let app = self.app_repo.find_by_id(application_id).await?.ok_or(StorageError::UserNotFound)?;
+        let opp = self.opp_repo.find_by_id(app.opportunity_id).await?.ok_or(StorageError::UserNotFound)?;
+
+        let role = self.company_repo.get_user_role(opp.company_id, actor_user_id).await?.ok_or_else(|| {
+            ApplicationError::Unauthorized("Not authorized to view this applicant".into())
+        })?;
+
+        if !role.can_review_applications() {
+            return Err(ApplicationError::Unauthorized("Insufficient permissions".into()));
+        }
+
+        // واکشی پروفایل کارجو بر اساس candidate_id
+        let cand_use_cases = CandidateUseCases::new(self.candidate_repo.clone(), self.app_repo.clone());
+        let candidate = self.candidate_repo.find_by_user_id(app.candidate_id).await?;
+        let user_id = candidate.map(|c| c.user_id).unwrap_or(app.candidate_id);
+        let profile = cand_use_cases.get_full_profile(user_id).await?;
+
+        Ok(ApplicationDossierDto {
+            application: app,
+            candidate_profile: profile,
+        })
     }
 }

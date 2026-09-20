@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 #[utoipa::path(
     post,
-    path = "/api/v1/companies/{company_id}/opportunities",
+    path = "/api/v1/companies/{id}/opportunities",
     request_body = CreateOpportunityCommand,
     responses((status = 201, description = "Opportunity created", body = Opportunity)),
     tag = "Opportunities"
@@ -21,10 +21,10 @@ use uuid::Uuid;
 pub async fn create_opportunity_handler(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
-    Path(company_id): Path<Uuid>,
+    Path(id): Path<Uuid>,
     Json(mut cmd): Json<CreateOpportunityCommand>,
 ) -> Result<impl IntoResponse, ApiError> {
-    cmd.company_id = company_id;
+    cmd.company_id = id;
     let opp = state.opp_use_cases.create_opportunity(auth.user_id, cmd).await?;
     Ok((StatusCode::CREATED, Json(opp)))
 }
@@ -42,6 +42,22 @@ pub async fn get_opportunity_handler(
     let opp = state.discovery_repo_pool().find_by_id(id).await?
         .ok_or(biz_storage::StorageError::UserNotFound)?;
     Ok(Json(opp))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/opportunities/{id}/track-click",
+    responses((status = 200, description = "External click tracked")),
+    tag = "Opportunities"
+)]
+pub async fn track_opportunity_click_handler(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    let _ = state.discovery_repo_pool().find_by_id(id).await?
+        .ok_or(biz_storage::StorageError::UserNotFound)?;
+    tracing::info!("Tracked external apply click for opportunity: {}", id);
+    Ok(StatusCode::OK)
 }
 
 #[utoipa::path(
