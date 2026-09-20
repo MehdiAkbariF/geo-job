@@ -1,0 +1,22 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/geo-types",
+    "crates/geo-storage",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Geospatial Core Team"]
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.38", features = ["full"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "macros", "uuid", "chrono"] }
+uuid = { version = "1.8", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
