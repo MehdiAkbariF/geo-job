@@ -9,6 +9,12 @@ use axum::{
 };
 use uuid::Uuid;
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/opportunities/{id}/save",
+    responses((status = 201, description = "Opportunity saved")),
+    tag = "Saved"
+)]
 pub async fn save_opportunity_handler(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
@@ -18,6 +24,12 @@ pub async fn save_opportunity_handler(
     Ok(StatusCode::CREATED)
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/opportunities/{id}/save",
+    responses((status = 200, description = "Opportunity unsaved")),
+    tag = "Saved"
+)]
 pub async fn remove_saved_opportunity_handler(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
@@ -27,6 +39,12 @@ pub async fn remove_saved_opportunity_handler(
     Ok(StatusCode::OK)
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/me/saved-opportunities",
+    responses((status = 200, description = "List saved items")),
+    tag = "Saved"
+)]
 pub async fn list_saved_opportunities_handler(
     State(state): State<AppState>,
     auth: AuthenticatedUser,

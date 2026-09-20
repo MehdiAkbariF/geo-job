@@ -10,6 +10,12 @@ use axum::{
 use biz_application::governance::CreateReportCommand;
 use uuid::Uuid;
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/opportunities/{id}/reports",
+    responses((status = 201, description = "Opportunity reported")),
+    tag = "Governance"
+)]
 pub async fn report_opportunity_handler(
     State(state): State<AppState>,
     auth: AuthenticatedUser,

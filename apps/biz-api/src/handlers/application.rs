@@ -10,6 +10,12 @@ use axum::{
 use biz_application::application::{ChangeApplicationStatusCommand, SubmitApplicationCommand};
 use uuid::Uuid;
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/opportunities/{id}/applications",
+    responses((status = 201, description = "Application submitted")),
+    tag = "Applications"
+)]
 pub async fn submit_application_handler(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
@@ -21,6 +27,12 @@ pub async fn submit_application_handler(
     Ok((StatusCode::CREATED, Json(app)))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/applications/{id}/status",
+    responses((status = 200, description = "Status changed")),
+    tag = "Applications"
+)]
 pub async fn change_application_status_handler(
     State(state): State<AppState>,
     auth: AuthenticatedUser,

@@ -7,6 +7,12 @@ use axum::{
 };
 use biz_application::discovery::SearchOpportunitiesRequest;
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/opportunities/search",
+    responses((status = 200, description = "Search results returned successfully")),
+    tag = "Discovery"
+)]
 pub async fn search_opportunities_handler(
     State(state): State<AppState>,
     Query(req): Query<SearchOpportunitiesRequest>,

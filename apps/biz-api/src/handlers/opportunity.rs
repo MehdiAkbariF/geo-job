@@ -10,6 +10,12 @@ use axum::{
 use biz_application::opportunity::CreateOpportunityCommand;
 use uuid::Uuid;
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/companies/{company_id}/opportunities",
+    responses((status = 201, description = "Opportunity created")),
+    tag = "Opportunities"
+)]
 pub async fn create_opportunity_handler(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
@@ -21,6 +27,12 @@ pub async fn create_opportunity_handler(
     Ok((StatusCode::CREATED, Json(opp)))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/opportunities/{id}/publish",
+    responses((status = 200, description = "Opportunity published")),
+    tag = "Opportunities"
+)]
 pub async fn publish_opportunity_handler(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
@@ -30,6 +42,12 @@ pub async fn publish_opportunity_handler(
     Ok(StatusCode::OK)
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/opportunities/{id}/pause",
+    responses((status = 200, description = "Opportunity paused")),
+    tag = "Opportunities"
+)]
 pub async fn pause_opportunity_handler(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
@@ -39,6 +57,12 @@ pub async fn pause_opportunity_handler(
     Ok(StatusCode::OK)
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/opportunities/{id}/close",
+    responses((status = 200, description = "Opportunity closed")),
+    tag = "Opportunities"
+)]
 pub async fn close_opportunity_handler(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
