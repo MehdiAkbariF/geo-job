@@ -2,329 +2,555 @@
 <html lang="fa" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>میز کار تست پلتفرم مکانی (Rust + PostGIS)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>کشف فرصت‌های شغلی مبتنی بر نقشه | Geo-Job</title>
     
+    <!-- فونت استاندارد وب فارسی Vazirmatn -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
     <!-- MapLibre GL JS -->
     <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
     <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
 
     <style>
-        body { margin: 0; padding: 0; font-family: Tahoma, sans-serif; background: #0f172a; }
-        #map { width: 100vw; height: 100vh; }
-        
-        /* پنل ابزار تست */
-        .workbench {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            z-index: 10;
-            background: white;
-            padding: 16px;
-            border-radius: 10px;
-            box-shadow: 0 4px 25px rgba(0,0,0,0.2);
-            width: 330px;
-            max-height: 92vh;
-            overflow-y: auto;
-            font-size: 13px;
-            line-height: 1.6;
-            border: 1px solid #cbd5e1;
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --primary-light: #eff6ff;
+            --surface: #ffffff;
+            --background: #f8fafc;
+            --border: #e2e8f0;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --accent-green: #10b981;
+            --accent-orange: #f59e0b;
+            --sidebar-width: 480px;
         }
-        .tab-bar {
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--background);
+            color: var(--text-main);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* چیدمان اصلی دسکتاپ (Split Layout) */
+        .app-container {
             display: flex;
-            gap: 4px;
-            flex-wrap: wrap;
+            height: 100vh;
+            width: 100vw;
+            position: relative;
+        }
+
+        /* ستون لیست فرصت‌ها */
+        .sidebar {
+            width: var(--sidebar-width);
+            height: 100%;
+            background: var(--surface);
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            z-index: 20;
+            box-shadow: -4px 0 20px rgba(0,0,0,0.05);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* سربرگ جستجو و ابزارها */
+        .sidebar-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+
+        .brand-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 12px;
         }
-        .tab-btn {
-            background: #f1f5f9;
-            border: 1px solid #cbd5e1;
-            padding: 6px 10px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 11px;
-            font-family: inherit;
+
+        .brand-title {
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
-        .tab-btn.active {
-            background: #2563eb;
-            color: white;
-            border-color: #2563eb;
-            font-weight: bold;
+
+        .api-status {
+            display: flex;
+            gap: 6px;
         }
-        .tab-content {
-            display: none;
-            border-top: 1px solid #e2e8f0;
-            padding-top: 10px;
-        }
-        .tab-content.active { display: block; }
-        .btn-action {
-            background: #2563eb;
-            color: white;
-            border: none;
-            padding: 8px 12px;
-            border-radius: 6px;
-            cursor: pointer;
-            width: 100%;
-            font-weight: bold;
-            font-family: inherit;
-            margin-top: 8px;
-        }
-        .btn-action:hover { background: #1d4ed8; }
-        input, select {
-            width: 100%;
-            padding: 8px;
-            margin-top: 4px;
-            border: 1px solid #cbd5e1;
-            border-radius: 6px;
-            box-sizing: border-box;
-            font-family: inherit;
-            font-size: 12px;
-        }
-        .badge-health {
-            display: inline-block;
+
+        .status-pill {
+            font-size: 10px;
             padding: 2px 8px;
             border-radius: 12px;
-            font-size: 11px;
-            font-weight: bold;
+            font-weight: 600;
         }
-        .health-ok { background: #dcfce7; color: #15803d; }
-        .health-err { background: #fee2e2; color: #b91c1c; }
-        .result-box {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            padding: 10px;
-            border-radius: 6px;
-            margin-top: 8px;
+        .status-online { background: #dcfce7; color: #15803d; }
+        .status-offline { background: #fee2e2; color: #b91c1c; }
+
+        /* نوار جستجوی زنده */
+        .search-input-wrapper {
+            position: relative;
+            margin-bottom: 10px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 10px 38px 10px 14px;
+            background: #f1f5f9;
+            border: 1px solid transparent;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 13px;
+            color: var(--text-main);
+            outline: none;
+            transition: all 0.2s;
+        }
+        .search-input:focus {
+            background: var(--surface);
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+        }
+
+        .search-icon {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+
+        /* چیپ‌های پرش به شهرها و فیلترها */
+        .filters-scroll {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+            scrollbar-width: none;
+        }
+        .filters-scroll::-webkit-scrollbar { display: none; }
+
+        .chip {
+            padding: 5px 12px;
+            background: #f1f5f9;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 500;
+            white-space: nowrap;
+            cursor: pointer;
+            color: var(--text-muted);
+            transition: all 0.15s;
+        }
+        .chip:hover { background: #e2e8f0; color: var(--text-main); }
+        .chip.active { background: var(--primary); color: white; border-color: var(--primary); font-weight: 600; }
+
+        /* لیست کارت‌های شغلی */
+        .jobs-scroll-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .results-meta {
             font-size: 12px;
-            word-break: break-word;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* کارت فرصت شغلی */
+        .job-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        .job-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+            transform: translateY(-2px);
+        }
+        .job-card.highlighted {
+            border-color: var(--primary);
+            background: #f8faff;
+            box-shadow: 0 0 0 2px var(--primary);
+        }
+
+        .job-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .company-logo-placeholder {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            background: #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 700;
+            color: #475569;
+            flex-shrink: 0;
+        }
+
+        .job-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 4px;
+            line-height: 1.4;
+        }
+
+        .company-name {
+            font-size: 12px;
+            color: var(--primary);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .verified-tick {
+            color: #0284c7;
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+        }
+
+        .job-tags {
+            display: flex;
+            gap: 6px;
+            margin: 12px 0 8px;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            font-size: 10.5px;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        .badge-remote { background: #dcfce7; color: #15803d; }
+        .badge-hybrid { background: #fef3c7; color: #b45309; }
+        .badge-onsite { background: #e0f2fe; color: #0369a1; }
+        .badge-salary { background: #f1f5f9; color: var(--text-main); font-weight: 600; }
+
+        .job-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            color: var(--text-muted);
+            border-top: 1px dashed var(--border);
+            padding-top: 10px;
+            margin-top: 8px;
+        }
+
+        /* نقشه MapLibre */
+        .map-container {
+            flex: 1;
+            height: 100%;
+            position: relative;
+        }
+        #map { width: 100%; height: 100%; }
+
+        /* دکمه شناور جابجایی بین نقشه و لیست در موبایل */
+        .mobile-toggle-btn {
+            display: none;
+            position: absolute;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 40;
+            background: var(--text-main);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 30px;
+            border: none;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            cursor: pointer;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* کشوی جزئیات آگهی (Detail Drawer) */
+        .drawer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 500px;
+            max-width: 100vw;
+            height: 100vh;
+            background: var(--surface);
+            z-index: 50;
+            box-shadow: 10px 0 40px rgba(0,0,0,0.15);
+            transform: translateX(-100%);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+        }
+        .drawer.open { transform: translateX(0); }
+
+        .drawer-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .drawer-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px 20px;
+            line-height: 1.8;
+            font-size: 13.5px;
+        }
+        .drawer-footer {
+            padding: 16px 20px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-apply {
+            flex: 1;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-apply:hover { background: var(--primary-hover); }
+
+        .btn-close {
+            background: transparent;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: var(--text-muted);
+        }
+
+        /* پاپ‌آپ ماژولار درخواست همکاری */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-card {
+            background: white;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 440px;
+            padding: 24px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.25);
+        }
+
+        /* رسپانسیو برای موبایل */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                width: 100vw;
+                height: 65vh;
+                border-left: none;
+                border-top: 1px solid var(--border);
+                border-radius: 20px 20px 0 0;
+                transform: translateY(calc(100% - 70px));
+            }
+            .sidebar.mobile-expanded {
+                transform: translateY(0);
+                height: 90vh;
+            }
+            .mobile-toggle-btn { display: flex; }
+            .drawer { width: 100vw; }
         }
     </style>
 </head>
 <body>
 
-    <div class="workbench">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <h3 style="margin: 0; color: #0f172a; font-size: 14px;">Geospatial Platform</h3>
-            <span id="health-badge" class="badge-health health-ok">سرور فعال</span>
-        </div>
+    <div class="app-container">
+        <!-- ستون لیست آگهی‌ها -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="brand-row">
+                    <div class="brand-title">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                        GeoJob
+                    </div>
+                    <div class="api-status">
+                        <span id="status-map" class="status-pill status-online">Map: 8080</span>
+                        <span id="status-biz" class="status-pill status-online">Biz: 8081</span>
+                    </div>
+                </div>
 
-        <div class="tab-bar">
-            <button class="tab-btn active" onclick="setTab('reverse')">آدرس معکوس</button>
-            <button class="tab-btn" onclick="setTab('nearby')">جستجوی شعاعی</button>
-            <button class="tab-btn" onclick="setTab('create')">ثبت آگهی کارفرما</button>
-            <button class="tab-btn" onclick="setTab('viewport')">دیدگاه نقشه</button>
-        </div>
+                <div class="search-input-wrapper">
+                    <input type="text" id="search-input" class="search-input" placeholder="عنوان شغلی، مهارت یا شرکت..." oninput="handleSearchInput(event)" />
+                    <svg class="search-icon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                </div>
 
-        <!-- تب ۱: آدرس‌یابی معکوس -->
-        <div id="panel-reverse" class="tab-content active">
-            <b>آدرس‌یابی معکوس (Reverse Geocoding):</b>
-            <div style="color: #64748b; font-size: 11px;">روی هر کجای نقشه کلیک کنید تا آدرس محله و شهر استخراج شود.</div>
-            <div id="reverse-output" class="result-box">روی نقشه کلیک کنید...</div>
-        </div>
+                <div class="filters-scroll">
+                    <button class="chip active" onclick="setCityFilter('tehran', 51.39, 35.72, 12, this)">تهران</button>
+                    <button class="chip" onclick="setCityFilter('isfahan', 51.66, 32.65, 12, this)">اصفهان</button>
+                    <button class="chip" onclick="setCityFilter('mashhad', 59.57, 36.30, 12, this)">مشهد</button>
+                    <button class="chip" onclick="setCityFilter('shiraz', 52.52, 29.63, 12, this)">شیراز</button>
+                    <button class="chip" onclick="setCityFilter('tabriz', 46.36, 38.05, 12, this)">تبریز</button>
+                    <button class="chip" id="filter-remote" onclick="toggleRemoteFilter(this)">دورکاری</button>
+                </div>
+            </div>
 
-        <!-- تب ۲: جستجوی شعاعی -->
-        <div id="panel-nearby" class="tab-content">
-            <b>جستجوی شعاعی (Nearby Search):</b>
-            <label style="font-size: 11px; color: #475569;">شعاع جستجو به متر:</label>
-            <input type="number" id="radius-input" value="3000" step="500" min="500" max="25000" />
-            <div style="color: #64748b; font-size: 11px; margin-top: 4px;">روی نقشه کلیک کنید تا مرکز شعاع مشخص شده و جستجو انجام شود.</div>
-            <div id="nearby-output" class="result-box">مرکز شعاع را مشخص کنید...</div>
-        </div>
+            <div class="jobs-scroll-list" id="jobs-list">
+                <div class="results-meta">
+                    <span id="results-count">در حال واکشی فرصت‌های محدوده...</span>
+                </div>
+                <!-- کارت‌های شغلی داینامیک اضافه می‌شوند -->
+            </div>
+        </aside>
 
-        <!-- تب ۳: ثبت موقعیت کارفرما -->
-        <div id="panel-create" class="tab-content">
-            <b>ثبت فرصت شغلی کارفرما (API):</b>
-            <label style="font-size: 11px; color: #475569;">عنوان فرصت شغلی:</label>
-            <input type="text" id="job-title" placeholder="مثال: مهندس ارشد Rust - دیجی‌کالا" />
-            <label style="font-size: 11px; color: #475569; margin-top: 6px; display: block;">مختصات:</label>
-            <input type="text" id="job-coords" readonly placeholder="برای انتخاب مختصات، روی نقشه کلیک کنید" />
-            <button class="btn-action" onclick="submitOpportunity()">ثبت در PostGIS</button>
-            <div id="create-output" class="result-box" style="display: none;"></div>
-        </div>
+        <!-- نقشه MapLibre -->
+        <main class="map-container">
+            <div id="map"></div>
+            <button class="mobile-toggle-btn" id="mobile-toggle" onclick="toggleMobileSidebar()">
+                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+                <span id="mobile-toggle-text">مشاهده لیست</span>
+            </button>
+        </main>
+    </div>
 
-        <!-- تب ۴: دیدگاه نقشه -->
-        <div id="panel-viewport" class="tab-content">
-            <b>جستجوی دیدگاه (Viewport Features):</b>
-            <div style="color: #64748b; font-size: 11px;">با هر حرکت نقشه، فرصت‌های همان کادر لود می‌شوند.</div>
-            <button class="btn-action" onclick="fetchViewportOpportunities()" style="background: #475569;">بروزرسانی محدوده</button>
-            <div id="viewport-output" class="result-box" style="color: #2563eb; font-weight: bold;">تعداد مارکرهای کارفرمایان: 0</div>
+    <!-- کشوی نمایش جزئیات کامل شغل -->
+    <div class="drawer" id="job-drawer">
+        <div class="drawer-header">
+            <div id="drawer-company" class="company-name">نام شرکت</div>
+            <button class="btn-close" onclick="closeDrawer()">✕</button>
+        </div>
+        <div class="drawer-body" id="drawer-content"></div>
+        <div class="drawer-footer">
+            <button class="btn-apply" onclick="openApplyModal()">ارسال درخواست همکاری (Apply)</button>
         </div>
     </div>
 
-    <div id="map"></div>
+    <!-- مودال ثبت سریع رزومه -->
+    <div class="modal-overlay" id="apply-modal">
+        <div class="modal-card">
+            <h3 style="margin-bottom: 12px; font-size: 16px;">ارسال درخواست همکاری</h3>
+            <p id="apply-modal-job-title" style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;"></p>
+            <textarea id="apply-cover-letter" style="width: 100%; height: 100px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 13px;" placeholder="پیام کوتاه یا توضیحات برای کارفرما (اختیاری)..."></textarea>
+            <div style="display: flex; gap: 8px; margin-top: 16px;">
+                <button class="btn-apply" onclick="submitApplication()">ارسال نهایی درخواست</button>
+                <button class="chip" style="padding: 10px 16px;" onclick="closeApplyModal()">انصراف</button>
+            </div>
+        </div>
+    </div>
 
     <script>
-        const API_BASE = "http://localhost:8080";
-        let activeTab = 'reverse';
-        let selectedCoords = null;
+        const MAP_API = "http://localhost:8080";
+        const BIZ_API = "http://localhost:8081";
 
-        // پلاگین راست‌به‌چپ برای زبان فارسی
+        let currentJobs = [];
+        let activeJobId = null;
+        let isRemoteOnly = false;
+        let searchTimeout = null;
+
+        // فعال‌سازی پلاگین زبان فارسی MapLibre
         if (maplibregl.getRTLTextPluginStatus() === 'unavailable') {
-            maplibregl.setRTLTextPlugin(
-                'https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.min.js',
-                null,
-                true
-            );
+            maplibregl.setRTLTextPlugin('https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.min.js', null, true);
         }
 
-        // نقشه برداری با کنتراست بالا و متمایز (High-Contrast Light Theme)
+        // نقشه تعاملی با تم اختصاصی شهری
         const map = new maplibregl.Map({
             container: 'map',
             center: [51.39, 35.72],
-            zoom: 13,
+            zoom: 12,
             minZoom: 4,
             maxZoom: 18,
-            localFontFamily: 'Tahoma, "Segoe UI", Arial, sans-serif',
             style: {
                 version: 8,
                 glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
                 sources: {
                     'base_tiles': {
                         type: 'vector',
-                        tiles: [`${API_BASE}/api/v1/base-tiles/{z}/{x}/{y}.mvt`],
+                        tiles: [`${MAP_API}/api/v1/base-tiles/{z}/{x}/{y}.mvt`],
                         minzoom: 4,
                         maxzoom: 18
                     },
-                    'opportunities': {
-                        type: 'geojson',
-                        data: { type: 'FeatureCollection', features: [] }
-                    },
-                    'nearby_circle': {
+                    'job_markers': {
                         type: 'geojson',
                         data: { type: 'FeatureCollection', features: [] }
                     }
                 },
                 layers: [
-                    // ۱. رنگ پس‌زمینه شهری ملایم
-                    {
-                        id: 'background',
-                        type: 'background',
-                        paint: { 'background-color': '#e2e8f0' }
-                    },
-                    // ۲. دایره محدوده جستجوی شعاعی
-                    {
-                        id: 'nearby_circle_fill',
-                        type: 'fill',
-                        source: 'nearby_circle',
-                        paint: {
-                            'fill-color': '#38bdf8',
-                            'fill-opacity': 0.25
-                        }
-                    },
-                    {
-                        id: 'nearby_circle_line',
-                        type: 'line',
-                        source: 'nearby_circle',
-                        paint: {
-                            'line-color': '#0284c7',
-                            'line-width': 2,
-                            'line-dasharray': [3, 3]
-                        }
-                    },
-                    // ۳. خیابان‌های فرعی و کوچه‌ها (کنتراست سفید خالص با حاشیه تیره مشخص)
-                    {
-                        id: 'roads_minor_casing',
-                        type: 'line',
-                        source: 'base_tiles',
-                        'source-layer': 'roads',
-                        filter: ['!in', 'highway', 'motorway', 'trunk', 'primary', 'secondary'],
-                        layout: { 'line-cap': 'round', 'line-join': 'round' },
-                        paint: {
-                            'line-color': '#94a3b8',
-                            'line-width': 3.0
-                        }
-                    },
+                    { id: 'background', type: 'background', paint: { 'background-color': '#f1f5f9' } },
                     {
                         id: 'roads_minor',
                         type: 'line',
                         source: 'base_tiles',
                         'source-layer': 'roads',
-                        filter: ['!in', 'highway', 'motorway', 'trunk', 'primary', 'secondary'],
-                        layout: { 'line-cap': 'round', 'line-join': 'round' },
-                        paint: {
-                            'line-color': '#ffffff',
-                            'line-width': 2.0
-                        }
-                    },
-                    // ۴. خیابان‌های اصلی و شریانی (رنگ زرد طلایی برجسته)
-                    {
-                        id: 'roads_primary_casing',
-                        type: 'line',
-                        source: 'base_tiles',
-                        'source-layer': 'roads',
-                        filter: ['in', 'highway', 'primary', 'secondary', 'primary_link'],
-                        layout: { 'line-cap': 'round', 'line-join': 'round' },
-                        paint: {
-                            'line-color': '#ca8a04',
-                            'line-width': 5.5
-                        }
+                        paint: { 'line-color': '#ffffff', 'line-width': 2.0 }
                     },
                     {
                         id: 'roads_primary',
                         type: 'line',
                         source: 'base_tiles',
                         'source-layer': 'roads',
-                        filter: ['in', 'highway', 'primary', 'secondary', 'primary_link'],
-                        layout: { 'line-cap': 'round', 'line-join': 'round' },
-                        paint: {
-                            'line-color': '#fde047',
-                            'line-width': 4.0
-                        }
-                    },
-                    // ۵. بزرگراه‌ها و آزادراه‌ها (رنگ نارنجی تند و چشم‌نواز)
-                    {
-                        id: 'roads_motorway_casing',
-                        type: 'line',
-                        source: 'base_tiles',
-                        'source-layer': 'roads',
-                        filter: ['in', 'highway', 'motorway', 'trunk', 'motorway_link', 'trunk_link'],
-                        layout: { 'line-cap': 'round', 'line-join': 'round' },
-                        paint: {
-                            'line-color': '#9a3412',
-                            'line-width': 7.5
-                        }
+                        filter: ['in', 'highway', 'primary', 'secondary', 'trunk', 'motorway'],
+                        paint: { 'line-color': '#fbbf24', 'line-width': 4.0 }
                     },
                     {
-                        id: 'roads_motorway',
-                        type: 'line',
-                        source: 'base_tiles',
-                        'source-layer': 'roads',
-                        filter: ['in', 'highway', 'motorway', 'trunk', 'motorway_link', 'trunk_link'],
-                        layout: { 'line-cap': 'round', 'line-join': 'round' },
+                        id: 'employer_markers_glow',
+                        type: 'circle',
+                        source: 'job_markers',
                         paint: {
-                            'line-color': '#ea580c',
-                            'line-width': 5.5
+                            'circle-radius': 14,
+                            'circle-color': '#3b82f6',
+                            'circle-opacity': 0.25
                         }
                     },
-                    // ۶. نام کامل فارسی معابر با حاشیه سفید بولد
-                    {
-                        id: 'roads_labels',
-                        type: 'symbol',
-                        source: 'base_tiles',
-                        'source-layer': 'roads',
-                        filter: ['has', 'name'],
-                        layout: {
-                            'symbol-placement': 'line',
-                            'text-field': ['get', 'name'],
-                            'text-size': 12,
-                            'text-font': ['Noto Sans Regular'],
-                            'text-max-angle': 40,
-                            'symbol-spacing': 250
-                        },
-                        paint: {
-                            'text-color': '#0f172a',
-                            'text-halo-color': '#ffffff',
-                            'text-halo-width': 3.0
-                        }
-                    },
-                    // ۷. مارکرهای واقعی فرصت‌های شغلی کارفرمایان
                     {
                         id: 'employer_markers',
                         type: 'circle',
-                        source: 'opportunities',
+                        source: 'job_markers',
                         paint: {
-                            'circle-radius': 9,
-                            'circle-color': '#dc2626',
+                            'circle-radius': 7.5,
+                            'circle-color': '#2563eb',
                             'circle-stroke-width': 2.5,
                             'circle-stroke-color': '#ffffff'
                         }
@@ -333,173 +559,235 @@
             }
         });
 
-        // تغییر تب‌ها
-        function setTab(tabId) {
-            activeTab = tabId;
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            event.target.classList.add('active');
-            document.getElementById(`panel-${tabId}`).classList.add('active');
-        }
+        // واکشی همگام مشاغل هنگام حرکت نقشه (Search as I move the map)
+        async function fetchJobsInViewport() {
+            const bounds = map.getBounds();
+            const bboxStr = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
+            const q = document.getElementById('search-input').value.trim();
 
-        // بررسی سلامت سرور
-        async function checkHealth() {
+            let url = `${BIZ_API}/api/v1/opportunities/search?bbox=${bboxStr}&limit=40`;
+            if (q) url += `&q=${encodeURIComponent(q)}`;
+            if (isRemoteOnly) url += `&workplace_type=remote`;
+
             try {
-                const res = await fetch(`${API_BASE}/healthz`);
-                const badge = document.getElementById('health-badge');
+                const res = await fetch(url);
                 if (res.ok) {
-                    badge.innerText = 'سرور متصل است';
-                    badge.className = 'badge-health health-ok';
-                } else {
-                    badge.innerText = 'خطای اتصال';
-                    badge.className = 'badge-health health-err';
+                    const data = await res.json();
+                    currentJobs = data.items || [];
+                    renderJobsList(currentJobs);
+                    updateMapMarkers(currentJobs);
                 }
-            } catch (e) {
-                const badge = document.getElementById('health-badge');
-                badge.innerText = 'سرور خاموش است';
-                badge.className = 'badge-health health-err';
+            } catch (err) {
+                console.error("Error fetching viewport jobs:", err);
             }
         }
-        setInterval(checkHealth, 8000);
-        checkHealth();
 
-        // مدیریت رویداد کلیک روی نقشه متناسب با تب فعال
-        map.on('click', async (e) => {
-            const { lng, lat } = e.lngLat;
-            selectedCoords = [lng, lat];
+        // رندر کارت‌های شغلی در سایدبار
+        function renderJobsList(jobs) {
+            const container = document.getElementById('jobs-list');
+            const countEl = document.getElementById('results-count');
+            countEl.innerText = `${jobs.length} فرصت شغلی در این محدوده`;
 
-            if (activeTab === 'reverse') {
-                document.getElementById('reverse-output').innerText = 'در حال استخراج آدرس...';
-                try {
-                    const res = await fetch(`${API_BASE}/api/v1/reverse-geocoding?lat=${lat}&lon=${lng}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        document.getElementById('reverse-output').innerHTML = `
-                            <b>آدرس استخراج‌شده:</b><br>${data.formatted_address}<br>
-                            <small>استان: ${data.province || '-'} | شهر: ${data.city || '-'} | محله: ${data.neighborhood || '-'}</small>
-                        `;
-                        new maplibregl.Popup().setLngLat([lng, lat]).setHTML(`<b>${data.formatted_address}</b>`).addTo(map);
-                    } else {
-                        document.getElementById('reverse-output').innerText = 'این نقطه درون مرز اداری ثبت‌شده‌ای نیست.';
-                    }
-                } catch (err) {
-                    document.getElementById('reverse-output').innerText = 'خطا در ارتباط با سرور';
-                }
-            } else if (activeTab === 'nearby') {
-                const radius = parseInt(document.getElementById('radius-input').value, 10);
-                drawNearbyCircle(lng, lat, radius);
-                document.getElementById('nearby-output').innerText = 'در حال جستجوی فرصت‌های نزدیک...';
-                try {
-                    const res = await fetch(`${API_BASE}/api/v1/map/nearby?lat=${lat}&lon=${lng}&radius=${radius}`);
-                    if (res.ok) {
-                        const geojson = await res.json();
-                        const count = geojson.features ? geojson.features.length : 0;
-                        document.getElementById('nearby-output').innerHTML = `<b>تعداد فرصت‌های یافت‌شده:</b> ${count} مورد`;
-                    }
-                } catch (err) {
-                    document.getElementById('nearby-output').innerText = 'خطا در سرور';
-                }
-            } else if (activeTab === 'create') {
-                document.getElementById('job-coords').value = `${lng.toFixed(6)}, ${lat.toFixed(6)}`;
+            // حفظ المنت نتایج و حذف کارت‌های قدیمی
+            container.querySelectorAll('.job-card').forEach(el => el.remove());
+
+            if (jobs.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'job-card';
+                empty.style.textAlign = 'center';
+                empty.style.color = '#94a3b8';
+                empty.innerText = 'در این محدوده هیچ فرصت شغلی فعالی یافت نشد. کادر نقشه را جابجا کنید.';
+                container.appendChild(empty);
+                return;
             }
-        });
 
-        // رسم دایره شعاعی بر روی نقشه
-        function drawNearbyCircle(lng, lat, radiusInMeters) {
-            const points = 64;
-            const km = radiusInMeters / 1000;
-            const coords = [];
-            const distanceX = km / (111.320 * Math.cos(lat * Math.PI / 180));
-            const distanceY = km / 110.574;
+            jobs.forEach(job => {
+                const card = document.createElement('div');
+                card.className = `job-card ${job.id === activeJobId ? 'highlighted' : ''}`;
+                card.id = `card-${job.id}`;
+                card.onclick = () => selectJob(job);
+                card.onmouseenter = () => highlightMarkerOnMap(job);
 
-            for (let i = 0; i < points; i++) {
-                const theta = (i / points) * (2 * Math.PI);
-                const x = distanceX * Math.cos(theta);
-                const y = distanceY * Math.sin(theta);
-                coords.push([lng + x, lat + y]);
-            }
-            coords.push(coords[0]);
+                const workplaceBadge = job.workplace_type === 'remote' 
+                    ? '<span class="badge badge-remote">دورکاری</span>'
+                    : (job.workplace_type === 'hybrid' ? '<span class="badge badge-hybrid">هیبرید</span>' : '<span class="badge badge-onsite">حضوری</span>');
 
-            map.getSource('nearby_circle').setData({
-                type: 'FeatureCollection',
-                features: [{
-                    type: 'Feature',
-                    geometry: { type: 'Polygon', coordinates: [coords] }
-                }]
+                const salaryText = job.salary_min 
+                    ? `از ${(job.salary_min / 1000000).toFixed(0)} تا ${(job.salary_max / 1000000).toFixed(0)} م.ت`
+                    : 'حقوق توافقی';
+
+                const companyInitial = job.company.name.charAt(0);
+
+                card.innerHTML = `
+                    <div class="job-card-header">
+                        <div>
+                            <div class="job-title">${job.title}</div>
+                            <div class="company-name">
+                                ${job.company.name}
+                                <svg class="verified-tick" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                            </div>
+                        </div>
+                        <div class="company-logo-placeholder">${companyInitial}</div>
+                    </div>
+                    <div class="job-tags">
+                        ${workplaceBadge}
+                        <span class="badge badge-salary">${salaryText}</span>
+                    </div>
+                    <div class="job-footer">
+                        <span>📍 ${job.location_summary || 'محدوده مرکزی'}</span>
+                        <span>مشاهده و ارسال رزومه ←</span>
+                    </div>
+                `;
+                container.appendChild(card);
             });
         }
 
-        // ثبت فرصت شغلی جدید توسط کارفرما از طریق POST /api/v1/locations
-        async function submitOpportunity() {
-            const title = document.getElementById('job-title').value.trim();
-            if (!title) return alert('لطفاً عنوان فرصت شغلی را وارد کنید.');
-            if (!selectedCoords) return alert('لطفاً ابتدا روی نقشه کلیک کنید تا مختصات انتخاب شود.');
+        // نمایش پین‌های نقشه
+        function updateMapMarkers(jobs) {
+            const features = jobs
+                .filter(j => j.coordinates && j.coordinates.length === 2)
+                .map(j => ({
+                    type: 'Feature',
+                    geometry: { type: 'Point', coordinates: j.coordinates },
+                    properties: { id: j.id, title: j.title, company: j.company.name }
+                }));
 
-            const payload = {
-                longitude: selectedCoords[0],
-                latitude: selectedCoords[1],
-                address_summary: title,
-                precision: "exact",
-                source: "opportunity"
-            };
+            map.getSource('job_markers').setData({
+                type: 'FeatureCollection',
+                features: features
+            });
+        }
 
-            const out = document.getElementById('create-output');
-            out.style.display = 'block';
-            out.innerText = 'در حال ثبت در PostGIS...';
+        // انتخاب و باز شدن یک شغل
+        function selectJob(job) {
+            activeJobId = job.id;
+            document.querySelectorAll('.job-card').forEach(c => c.classList.remove('highlighted'));
+            const selectedCard = document.getElementById(`card-${job.id}`);
+            if (selectedCard) {
+                selectedCard.classList.add('highlighted');
+                selectedCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
 
-            try {
-                const res = await fetch(`${API_BASE}/api/v1/locations`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+            if (job.coordinates) {
+                map.flyTo({ center: job.coordinates, zoom: 14, speed: 1.2 });
+            }
+
+            openDrawer(job);
+        }
+
+        function highlightMarkerOnMap(job) {
+            if (job.coordinates) {
+                map.getSource('job_markers').setData({
+                    type: 'FeatureCollection',
+                    features: currentJobs.filter(j => j.coordinates).map(j => ({
+                        type: 'Feature',
+                        geometry: { type: 'Point', coordinates: j.coordinates },
+                        properties: {
+                            id: j.id,
+                            is_active: j.id === job.id
+                        }
+                    }))
                 });
-
-                if (res.ok) {
-                    const data = await res.json();
-                    out.innerHTML = `<span style="color: #16a34a; font-weight: bold;">ثبت شد!</span><br><small>شناسه: ${data.id}</small>`;
-                    document.getElementById('job-title').value = '';
-                    fetchViewportOpportunities();
-                    new maplibregl.Popup()
-                        .setLngLat(selectedCoords)
-                        .setHTML(`<b>فرصت ثبت شد:</b><br>${title}`)
-                        .addTo(map);
-                } else {
-                    out.innerText = 'خطا در ثبت فرصت';
-                }
-            } catch (err) {
-                out.innerText = 'خطا در شبکه';
             }
         }
 
-        // بارگذاری مارکرهای ثبت‌شده کارفرمایان در کادر دیدگاه
-        async function fetchViewportOpportunities() {
-            const bounds = map.getBounds();
-            const bboxStr = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
-            const zoom = Math.round(map.getZoom());
-
-            try {
-                const res = await fetch(`${API_BASE}/api/v1/map/features?bbox=${bboxStr}&zoom=${zoom}&source=opportunity`);
-                if (res.ok) {
-                    const geojson = await res.json();
-                    map.getSource('opportunities').setData(geojson);
-                    const count = geojson.features ? geojson.features.length : 0;
-                    document.getElementById('viewport-output').innerText = `مارکرهای کارفرمایان: ${count} مورد`;
-                }
-            } catch (e) {}
+        // باز و بسته شدن Drawer جزئیات آگهی
+        function openDrawer(job) {
+            document.getElementById('drawer-company').innerText = job.company.name;
+            document.getElementById('drawer-content').innerHTML = `
+                <h2 style="font-size: 18px; margin-bottom: 12px; font-weight: 800;">${job.title}</h2>
+                <div style="display: flex; gap: 8px; margin-bottom: 20px;">
+                    <span class="badge badge-salary">${job.workplace_type}</span>
+                    <span class="badge badge-salary">${job.opportunity_type}</span>
+                    <span class="badge badge-salary">${job.experience_level}</span>
+                </div>
+                <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 8px;">درباره فرصت شغلی:</h4>
+                <p style="color: #475569; margin-bottom: 20px;">${job.description_summary}</p>
+                <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 8px;">موقعیت فیزیکی:</h4>
+                <p style="color: #475569;">📍 ${job.location_summary || 'ثبت شده در نقشه'}</p>
+            `;
+            document.getElementById('apply-modal-job-title').innerText = `${job.title} در ${job.company.name}`;
+            document.getElementById('job-drawer').classList.add('open');
         }
 
-        map.on('moveend', fetchViewportOpportunities);
-        map.on('load', fetchViewportOpportunities);
+        function closeDrawer() {
+            document.getElementById('job-drawer').classList.remove('open');
+        }
 
-        // پاپ‌آپ هنگام کلیک روی مارکرهای قرمز کارفرما
+        // مودال Apply
+        function openApplyModal() { document.getElementById('apply-modal').classList.add('active'); }
+        function closeApplyModal() { document.getElementById('apply-modal').classList.remove('active'); }
+
+        async function submitApplication() {
+            if (!activeJobId) return;
+            const cover = document.getElementById('apply-cover-letter').value;
+
+            // ارسال درخواست همکاری به BIZ_API
+            try {
+                // ثبت به عنوان ردیابی اپلای
+                await fetch(`${BIZ_API}/api/v1/opportunities/${activeJobId}/track-click`, { method: 'POST' });
+                alert('درخواست همکاری شما با موفقیت برای کارفرما ثبت و ارسال گردید!');
+                closeApplyModal();
+                closeDrawer();
+            } catch (err) {
+                alert('خطا در ارسال درخواست.');
+            }
+        }
+
+        // رویداد کلیک روی پین‌های نقشه -> باز شدن کارت متناظر
         map.on('click', 'employer_markers', (e) => {
-            const coords = e.features[0].geometry.coordinates.slice();
-            const title = e.features[0].properties.address_summary || 'فرصت شغلی';
-            new maplibregl.Popup()
-                .setLngLat(coords)
-                .setHTML(`<b style="color: #dc2626;">فرصت شغلی کارفرما:</b><br>${title}`)
-                .addTo(map);
+            const jobId = e.features[0].properties.id;
+            const job = currentJobs.find(j => j.id === jobId);
+            if (job) selectJob(job);
         });
+
+        // نشانگر ماوس روی مارکرها
+        map.on('mouseenter', 'employer_markers', () => { map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', 'employer_markers', () => { map.getCanvas().style.cursor = ''; });
+
+        // رویداد جابجایی نقشه
+        map.on('moveend', fetchJobsInViewport);
+        map.on('load', fetchJobsInViewport);
+
+        // پرش به شهر
+        function setCityFilter(cityName, lng, lat, zoom, btn) {
+            document.querySelectorAll('.filters-scroll .chip').forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            map.flyTo({ center: [lng, lat], zoom: zoom, essential: true });
+        }
+
+        function toggleRemoteFilter(btn) {
+            isRemoteOnly = !isRemoteOnly;
+            btn.classList.toggle('active', isRemoteOnly);
+            fetchJobsInViewport();
+        }
+
+        function handleSearchInput(e) {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(fetchJobsInViewport, 350);
+        }
+
+        // کنترل سایدبار در موبایل
+        function toggleMobileSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const isExpanded = sidebar.classList.toggle('mobile-expanded');
+            document.getElementById('mobile-toggle-text').innerText = isExpanded ? 'نمایش نقشه' : 'مشاهده لیست';
+        }
+
+        // بررسی سلامت سرورها
+        async function checkApis() {
+            try {
+                const rMap = await fetch(`${MAP_API}/healthz`);
+                document.getElementById('status-map').className = rMap.ok ? 'status-pill status-online' : 'status-pill status-offline';
+            } catch { document.getElementById('status-map').className = 'status-pill status-offline'; }
+
+            try {
+                const rBiz = await fetch(`${BIZ_API}/api/v1/opportunities/search?limit=1`);
+                document.getElementById('status-biz').className = rBiz.ok ? 'status-pill status-online' : 'status-pill status-offline';
+            } catch { document.getElementById('status-biz').className = 'status-pill status-offline'; }
+        }
+        setInterval(checkApis, 10000);
+        checkApis();
     </script>
 </body>
 </html>

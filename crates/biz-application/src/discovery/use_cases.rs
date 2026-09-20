@@ -1,9 +1,9 @@
 use super::dto::SearchOpportunitiesRequest;
 use crate::error::ApplicationError;
-use biz_domain::discovery::{SearchPageResult, SearchQuery, SortBy};
+use biz_domain::discovery::{OpportunitySearchResult, SearchPageResult, SearchQuery, SortBy};
 use biz_storage::DiscoveryRepository;
 use geo_types::{BoundingBox, GeoPoint, Radius};
-
+use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct DiscoveryUseCases {
@@ -61,5 +61,10 @@ impl DiscoveryUseCases {
 
         let result = self.discovery_repo.search(&query).await?;
         Ok(result)
+    }
+
+    pub async fn get_by_location(&self, location_id: Uuid) -> Result<Vec<OpportunitySearchResult>, ApplicationError> {
+        let items = self.discovery_repo.list_by_location(location_id).await?;
+        Ok(items)
     }
 }

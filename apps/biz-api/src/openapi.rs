@@ -23,6 +23,7 @@ use biz_application::opportunity::CreateOpportunityCommand;
 use biz_application::saved::SaveSearchCommand;
 
 use biz_domain::application::{Application, ApplicationStatus};
+use biz_domain::discovery::{CompanySummary, OpportunitySearchResult, SearchPageResult};
 use biz_domain::governance::{Report, VerificationStatus};
 use biz_domain::opportunity::{Opportunity, OpportunityStatus, OpportunityType, RemoteScope, Salary, WorkplaceType};
 use biz_domain::taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skill};
@@ -58,8 +59,9 @@ use biz_domain::taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skil
         crate::handlers::company::list_public_company_opportunities_handler,
         crate::handlers::company::list_opportunity_applicants_handler,
 
-        // Discovery & Details
+        // Discovery & Map Bridge
         crate::handlers::discovery::search_opportunities_handler,
+        crate::handlers::discovery::get_opportunities_by_location_handler,
         crate::handlers::opportunity::get_opportunity_handler,
         crate::handlers::opportunity::track_opportunity_click_handler,
 
@@ -141,7 +143,10 @@ use biz_domain::taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skil
             Category,
             Industry,
             Occupation,
-            Skill
+            Skill,
+            CompanySummary,
+            OpportunitySearchResult,
+            SearchPageResult
         )
     ),
     tags(
@@ -150,7 +155,7 @@ use biz_domain::taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skil
         (name = "Companies", description = "Company profile, branch locations & team membership"),
         (name = "Employer ATS", description = "Applicant tracking system, dossiers & opportunity pipeline"),
         (name = "Opportunities", description = "Opportunity lifecycle management (Draft, Publish, Pause, Close)"),
-        (name = "Discovery", description = "Search & Discovery orchestration"),
+        (name = "Discovery", description = "Search & Discovery orchestration and Map Pin bridging"),
         (name = "Taxonomies", description = "Standard industries, job categories, occupations & skills autocomplete"),
         (name = "Applications", description = "Candidate job applications pipeline"),
         (name = "Saved", description = "Saved opportunities, companies & searches"),

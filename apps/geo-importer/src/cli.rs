@@ -13,9 +13,13 @@ pub struct CliArgs {
     #[arg(short, long, default_value_t = 500)]
     pub batch_size: usize,
 
-    /// Seed sample opportunity locations for testing
+    /// Seed realistic opportunities & companies across Iranian cities for testing
     #[arg(long, default_value_t = false)]
     pub seed_samples: bool,
+
+    /// Clean and remove all seeded test data from the database
+    #[arg(long, default_value_t = false)]
+    pub clean_samples: bool,
 
     /// PostgreSQL Database URL
     #[arg(long)]

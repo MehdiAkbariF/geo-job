@@ -52,7 +52,10 @@ impl SavedRepository {
             pub company_name: String,
             pub company_slug: String,
             pub company_logo: Option<String>,
+            pub location_id: Option<Uuid>,
             pub location_summary: Option<String>,
+            pub longitude: Option<f64>,
+            pub latitude: Option<f64>,
         }
 
         let sql = r#"
@@ -73,7 +76,10 @@ impl SavedRepository {
                 c.name AS company_name,
                 c.slug AS company_slug,
                 c.logo_storage_key AS company_logo,
-                loc.address_summary AS location_summary
+                loc.id AS location_id,
+                loc.address_summary AS location_summary,
+                ST_X(loc.coordinates::geometry) AS longitude,
+                ST_Y(loc.coordinates::geometry) AS latitude
             FROM saved_opportunities so
             INNER JOIN opportunities o ON o.id = so.opportunity_id
             INNER JOIN companies c ON c.id = o.company_id
@@ -88,27 +94,36 @@ impl SavedRepository {
             .fetch_all(&self.pool)
             .await?;
 
-        Ok(rows.into_iter().map(|r| OpportunitySearchResult {
-            id: r.id,
-            title: r.title,
-            description_summary: r.description,
-            opportunity_type: r.opportunity_type,
-            workplace_type: r.workplace_type,
-            remote_scope: r.remote_scope,
-            experience_level: r.experience_level,
-            salary_min: r.salary_min,
-            salary_max: r.salary_max,
-            salary_currency: r.salary_currency,
-            salary_period: r.salary_period,
-            published_at: r.published_at,
-            company: CompanySummary {
-                id: r.company_id,
-                name: r.company_name,
-                slug: r.company_slug,
-                logo_storage_key: r.company_logo,
-            },
-            location_summary: r.location_summary,
-            distance_meters: None,
+        Ok(rows.into_iter().map(|r| {
+            let coordinates = match (r.longitude, r.latitude) {
+                (Some(lon), Some(lat)) => Some([lon, lat]),
+                _ => None,
+            };
+
+            OpportunitySearchResult {
+                id: r.id,
+                title: r.title,
+                description_summary: r.description,
+                opportunity_type: r.opportunity_type,
+                workplace_type: r.workplace_type,
+                remote_scope: r.remote_scope,
+                experience_level: r.experience_level,
+                salary_min: r.salary_min,
+                salary_max: r.salary_max,
+                salary_currency: r.salary_currency,
+                salary_period: r.salary_period,
+                published_at: r.published_at,
+                company: CompanySummary {
+                    id: r.company_id,
+                    name: r.company_name,
+                    slug: r.company_slug,
+                    logo_storage_key: r.company_logo,
+                },
+                location_id: r.location_id,
+                location_summary: r.location_summary,
+                coordinates,
+                distance_meters: None,
+            }
         }).collect())
     }
 

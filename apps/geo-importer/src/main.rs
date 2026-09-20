@@ -2,6 +2,7 @@ mod cli;
 mod error;
 mod osm_parser;
 mod pipeline;
+mod seeder;
 
 use clap::Parser;
 use cli::CliArgs;
@@ -38,6 +39,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pool = create_connection_pool(&db_config).await?;
     run_migrations(&pool).await?;
 
+    // ۱. اگر کاربر دستور پاک‌سازی داده‌های تستی را داده باشد:
+    if args.clean_samples {
+        seeder::clean_seeded_data(&pool).await?;
+        return Ok(());
+    }
+
+    // ۲. اگر کاربر دستور بذرپاشی داده‌های تستی ایران را داده باشد:
+    if args.seed_samples {
+        seeder::seed_iran_test_data(&pool).await?;
+        return Ok(());
+    }
+
+    // ۳. اگر فایل PBF برای ایمپورت نقشه داده شده باشد:
     if let Some(pbf_path) = args.file {
         tracing::info!("Processing real OSM data from PBF: {:?}", pbf_path);
 
@@ -45,7 +59,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let (roads_tx, mut roads_rx) = tokio::sync::mpsc::channel::<Vec<ExtractedOsmRoad>>(16);
         let batch_size = args.batch_size;
 
-        // Producer Thread: Streaming parse of actual nodes and ways
         let producer_handle = tokio::task::spawn_blocking(move || {
             osm_parser::stream_osm_pbf_full(
                 &pbf_path,
@@ -65,7 +78,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             )
         });
 
-        // Consumers: Concurrently write real points and real road centerlines
         let pool_for_points = pool.clone();
         let points_consumer = tokio::spawn(async move {
             let mut count = 0;
@@ -99,9 +111,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let total_roads = roads_consumer.await?;
 
         tracing::info!(
-            "REAL DATA IMPORT COMPLETED! Successfully ingested {} real locations and {} real road centerlines directly into PostGIS.",
-            total_points,
-            total_roads
+            "REAL DATA IMPORT COMPLETED! Successfully ingested {} real locations and {} real road centerlines.",
+            total_points, total_roads
         );
     }
 
