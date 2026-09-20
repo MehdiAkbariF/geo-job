@@ -1,9 +1,8 @@
 use crate::error::DomainError;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-/// Exact frozen Opportunity lifecycle (Section 15 of MASTER PROMPT 03).
-/// CLOSED is terminal. EXPIRED is NOT a lifecycle state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum OpportunityStatus {
     Draft,
@@ -32,7 +31,6 @@ impl OpportunityStatus {
         }
     }
 
-    /// Enforces allowed state transitions according to section 15
     pub fn can_transition_to(&self, next: Self) -> bool {
         match (self, next) {
             (Self::Draft, Self::Published) => true,
@@ -40,7 +38,7 @@ impl OpportunityStatus {
             (Self::Paused, Self::Published) => true,
             (Self::Published, Self::Closed) => true,
             (Self::Paused, Self::Closed) => true,
-            _ => false, // CLOSED is terminal; other transitions are invalid
+            _ => false,
         }
     }
 

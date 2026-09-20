@@ -2,26 +2,38 @@ use crate::error::ApiError;
 use crate::state::AppState;
 use axum::{
     extract::{Query, State},
-    http::StatusCode,
     response::IntoResponse,
     Json,
 };
-use geo_geocoding::{find_areas_by_parent, reverse_geocode_point};
+use geo_geocoding::{find_areas_by_parent, reverse_geocode_point, AdministrativeArea, ReverseGeocodeResult};
 use geo_types::GeoPoint;
 use serde::Deserialize;
+use utoipa::IntoParams;
 use uuid::Uuid;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct ReverseGeocodeQuery {
     pub lat: f64,
     pub lon: f64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct AdminAreasQuery {
     pub parent_id: Option<Uuid>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/reverse-geocoding",
+    params(ReverseGeocodeQuery),
+    responses(
+        (status = 200, description = "Address resolved", body = ReverseGeocodeResult),
+        (status = 404, description = "Area not found")
+    ),
+    tag = "Geocoding"
+)]
 pub async fn reverse_geocode_handler(
     State(state): State<AppState>,
     Query(params): Query<ReverseGeocodeQuery>,
@@ -38,6 +50,15 @@ pub async fn reverse_geocode_handler(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/admin/areas",
+    params(AdminAreasQuery),
+    responses(
+        (status = 200, description = "List administrative areas", body = Vec<AdministrativeArea>)
+    ),
+    tag = "Geocoding"
+)]
 pub async fn list_admin_areas_handler(
     State(state): State<AppState>,
     Query(params): Query<AdminAreasQuery>,

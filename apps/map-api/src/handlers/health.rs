@@ -2,6 +2,15 @@ use crate::state::AppState;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use serde_json::json;
 
+#[utoipa::path(
+    get,
+    path = "/healthz",
+    responses(
+        (status = 200, description = "Map service is healthy"),
+        (status = 503, description = "Database connection error")
+    ),
+    tag = "Health"
+)]
 pub async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
     match sqlx::query("SELECT 1").execute(&state.pool).await {
         Ok(_) => (

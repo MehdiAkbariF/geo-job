@@ -26,3 +26,5 @@ serde_json.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
+utoipa.workspace = true
+utoipa-swagger-ui.workspace = true

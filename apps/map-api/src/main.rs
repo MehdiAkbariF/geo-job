@@ -1,6 +1,7 @@
 mod dto;
 mod error;
 mod handlers;
+mod openapi;
 mod state;
 
 use axum::{
@@ -8,11 +9,14 @@ use axum::{
     Router,
 };
 use geo_storage::{create_connection_pool, run_migrations, DatabaseConfig};
+use openapi::MapApiDoc;
 use state::AppState;
 use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -43,6 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app_state = AppState::new(pool);
 
     let app = Router::new()
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", MapApiDoc::openapi()))
         .route("/healthz", get(handlers::health::health_check))
         .route("/api/v1/map/features", get(handlers::map::search_viewport))
         .route("/api/v1/map/nearby", get(handlers::map::search_nearby))
@@ -62,6 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     tracing::info!("Map Platform HTTP server listening on http://{}", addr);
+    tracing::info!("Swagger UI available at http://{}/swagger-ui", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;

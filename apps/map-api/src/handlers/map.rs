@@ -10,6 +10,15 @@ use geo_presentation::{ClusterFeature, FeatureCollection, LocationProperties, Ma
 use geo_query::{bbox_query::BBoxSearchOptions, cluster_locations_in_bbox, find_locations_in_bbox, find_locations_within_radius};
 use serde_json::Value;
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/map/features",
+    params(BBoxQueryParams),
+    responses(
+        (status = 200, description = "GeoJSON FeatureCollection returned")
+    ),
+    tag = "Map"
+)]
 pub async fn search_viewport(
     State(state): State<AppState>,
     Query(params): Query<BBoxQueryParams>,
@@ -40,6 +49,15 @@ pub async fn search_viewport(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/map/nearby",
+    params(NearbyQueryParams),
+    responses(
+        (status = 200, description = "Nearby GeoJSON features returned")
+    ),
+    tag = "Map"
+)]
 pub async fn search_nearby(
     State(state): State<AppState>,
     Query(params): Query<NearbyQueryParams>,

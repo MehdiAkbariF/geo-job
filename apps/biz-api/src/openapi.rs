@@ -1,5 +1,13 @@
 use utoipa::OpenApi;
 
+use biz_application::application::{ApplicationDto, ChangeApplicationStatusCommand, SubmitApplicationCommand};
+use biz_application::governance::CreateReportCommand;
+use biz_application::identity::{AuthResponseDto, LoginCommand, RegisterCommand};
+use biz_application::opportunity::CreateOpportunityCommand;
+
+use biz_domain::opportunity::{Opportunity, OpportunityStatus, OpportunityType, RemoteScope, Salary, WorkplaceType};
+use biz_domain::taxonomy::ExperienceLevel;
+
 #[derive(OpenApi)]
 #[openapi(
     paths(
@@ -18,7 +26,25 @@ use utoipa::OpenApi;
         crate::handlers::saved::list_saved_opportunities_handler,
         crate::handlers::governance::report_opportunity_handler
     ),
-    components(schemas()),
+    components(
+        schemas(
+            RegisterCommand,
+            LoginCommand,
+            AuthResponseDto,
+            CreateOpportunityCommand,
+            SubmitApplicationCommand,
+            ChangeApplicationStatusCommand,
+            ApplicationDto,
+            CreateReportCommand,
+            Opportunity,
+            OpportunityType,
+            WorkplaceType,
+            RemoteScope,
+            ExperienceLevel,
+            Salary,
+            OpportunityStatus
+        )
+    ),
     tags(
         (name = "Auth", description = "Authentication & Identity management"),
         (name = "Opportunities", description = "Opportunity lifecycle management"),

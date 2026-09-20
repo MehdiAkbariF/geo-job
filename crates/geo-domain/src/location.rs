@@ -1,9 +1,10 @@
 use chrono::{DateTime, Utc};
 use geo_types::GeoPoint;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum LocationPrecision {
     Exact,
@@ -20,9 +21,10 @@ impl Default for LocationPrecision {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub struct Location {
     pub id: Uuid,
+    #[schema(value_type = [f64; 2], example = json!([51.3890, 35.6892]))]
     pub point: GeoPoint,
     pub address_summary: Option<String>,
     pub precision: LocationPrecision,

@@ -2,9 +2,18 @@ use crate::dto::CreateLocationRequest;
 use crate::error::ApiError;
 use crate::state::AppState;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
-use geo_domain::{LocationPrecision, NewLocation};
+use geo_domain::{Location, LocationPrecision, NewLocation};
 use geo_types::GeoPoint;
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/locations",
+    request_body = CreateLocationRequest,
+    responses(
+        (status = 201, description = "Location created successfully", body = Location)
+    ),
+    tag = "Locations"
+)]
 pub async fn create_location(
     State(state): State<AppState>,
     Json(payload): Json<CreateLocationRequest>,

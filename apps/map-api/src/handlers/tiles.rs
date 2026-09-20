@@ -7,7 +7,19 @@ use axum::{
 };
 use geo_tiles::{get_base_map_mvt_tile, get_locations_mvt_tile, TileCoordinate};
 
-/// Serves multi-layer Base Map Vector Tiles (Roads, Boundaries, Places) from PostGIS.
+#[utoipa::path(
+    get,
+    path = "/api/v1/base-tiles/{z}/{x}/{tile}",
+    params(
+        ("z" = u8, Path, description = "Zoom level"),
+        ("x" = u32, Path, description = "Tile X coordinate"),
+        ("tile" = String, Path, description = "Tile Y coordinate with .mvt or .pbf")
+    ),
+    responses(
+        (status = 200, description = "MVT Vector Tile Protobuf binary", content_type = "application/x-protobuf")
+    ),
+    tag = "Tiles"
+)]
 pub async fn serve_base_map_tile(
     State(state): State<AppState>,
     Path((z, x, tile_str)): Path<(u8, u32, String)>,
@@ -33,7 +45,19 @@ pub async fn serve_base_map_tile(
     Ok((StatusCode::OK, headers, pbf_bytes))
 }
 
-/// Serves dynamic Locations layer MVT.
+#[utoipa::path(
+    get,
+    path = "/api/v1/tiles/{z}/{x}/{tile}",
+    params(
+        ("z" = u8, Path, description = "Zoom level"),
+        ("x" = u32, Path, description = "Tile X coordinate"),
+        ("tile" = String, Path, description = "Tile Y coordinate with .mvt or .pbf")
+    ),
+    responses(
+        (status = 200, description = "Locations Layer Vector Tile", content_type = "application/x-protobuf")
+    ),
+    tag = "Tiles"
+)]
 pub async fn serve_vector_tile(
     State(state): State<AppState>,
     Path((z, x, tile_str)): Path<(u8, u32, String)>,

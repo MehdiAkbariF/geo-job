@@ -2,12 +2,18 @@ use crate::error::ApiError;
 use geo_domain::LocationPrecision;
 use geo_types::{BoundingBox, GeoPoint, Radius};
 use serde::Deserialize;
+use utoipa::{IntoParams, ToSchema};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct BBoxQueryParams {
+    /// Bounding Box format: "west,south,east,north" (e.g. "51.2,35.5,51.5,35.8")
     pub bbox: String,
+    /// Zoom level (0-22)
     pub zoom: Option<u8>,
+    /// Limit results count
     pub limit: Option<usize>,
+    /// Source filter (e.g. "opportunity", "osm")
     pub source: Option<String>,
 }
 
@@ -30,11 +36,16 @@ impl BBoxQueryParams {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct NearbyQueryParams {
+    /// Latitude
     pub lat: f64,
+    /// Longitude
     pub lon: f64,
+    /// Search radius in meters
     pub radius: f64,
+    /// Limit results
     pub limit: Option<usize>,
 }
 
@@ -48,7 +59,7 @@ impl NearbyQueryParams {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateLocationRequest {
     pub longitude: f64,
     pub latitude: f64,

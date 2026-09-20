@@ -1,0 +1,1763 @@
+﻿=========================================
+APPS STRUCTURE
+=========================================
+  |-- biz-api
+  |-- geo-importer
+  |-- map-api
+    |-- src
+    |-- Cargo.toml
+      |-- extractors
+      |-- handlers
+      |-- error.rs
+      |-- main.rs
+      |-- openapi.rs
+      |-- state.rs
+        |-- auth.rs
+        |-- mod.rs
+        |-- application.rs
+        |-- auth.rs
+        |-- discovery.rs
+        |-- governance.rs
+        |-- mod.rs
+        |-- opportunity.rs
+        |-- saved.rs
+    |-- src
+    |-- Cargo.toml
+      |-- cli.rs
+      |-- error.rs
+      |-- main.rs
+      |-- osm_parser.rs
+      |-- pipeline.rs
+    |-- src
+    |-- Cargo.toml
+      |-- dto
+      |-- handlers
+      |-- error.rs
+      |-- main.rs
+      |-- state.rs
+        |-- mod.rs
+        |-- requests.rs
+        |-- geocoding.rs
+        |-- health.rs
+        |-- locations.rs
+        |-- map.rs
+        |-- mod.rs
+        |-- tiles.rs
+
+
+=========================================
+APPS SOURCE CODES CONTENT
+=========================================
+
+--------------------------------------------------
+FILE: biz-api\src\extractors\auth.rs
+--------------------------------------------------
+
+use crate::error::ApiError;
+use crate::state::AppState;
+use axum::{
+    async_trait,
+    extract::{FromRef, FromRequestParts},
+    http::{header, request::Parts},
+};
+use uuid::Uuid;
+
+pub struct AuthenticatedUser {
+    pub user_id: Uuid,
+}
+
+#[async_trait]
+impl<S> FromRequestParts<S> for AuthenticatedUser
+where
+    AppState: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let app_state = AppState::from_ref(state);
+
+        let auth_header = parts
+            .headers
+            .get(header::AUTHORIZATION)
+            .and_then(|value| value.to_str().ok())
+            .ok_or_else(|| ApiError::Unauthorized("Missing Authorization header".into()))?;
+
+        if !auth_header.starts_with("Bearer ") {
+            return Err(ApiError::Unauthorized("Invalid authorization format. Use Bearer token".into()));
+        }
+
+        let token = &auth_header[7..];
+        let claims = app_state
+            .token_service
+            .verify_access_token(token)
+            .map_err(|_| ApiError::Unauthorized("Invalid or expired access token".into()))?;
+
+        Ok(AuthenticatedUser { user_id: claims.sub })
+    }
+}
+
+--------------------------------------------------
+FILE: biz-api\src\extractors\mod.rs
+--------------------------------------------------
+
+pub mod auth;
+
+--------------------------------------------------
+FILE: biz-api\src\handlers\application.rs
+--------------------------------------------------
+
+use crate::error::ApiError;
+use crate::extractors::auth::AuthenticatedUser;
+use crate::state::AppState;
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
+use biz_application::application::{ChangeApplicationStatusCommand, SubmitApplicationCommand};
+use uuid::Uuid;
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/opportunities/{id}/applications",
+    responses((status = 201, description = "Application submitted")),
+    tag = "Applications"
+)]
+pub async fn submit_application_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(opportunity_id): Path<Uuid>,
+    Json(mut cmd): Json<SubmitApplicationCommand>,
+) -> Result<impl IntoResponse, ApiError> {
+    cmd.opportunity_id = opportunity_id;
+    let app = state.app_use_cases.submit_application(auth.user_id, cmd).await?;
+    Ok((StatusCode::CREATED, Json(app)))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/applications/{id}/status",
+    responses((status = 200, description = "Status changed")),
+    tag = "Applications"
+)]
+pub async fn change_application_status_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(application_id): Path<Uuid>,
+    Json(cmd): Json<ChangeApplicationStatusCommand>,
+) -> Result<impl IntoResponse, ApiError> {
+    state.app_use_cases.change_status(auth.user_id, application_id, cmd).await?;
+    Ok(StatusCode::OK)
+}
+
+--------------------------------------------------
+FILE: biz-api\src\handlers\auth.rs
+--------------------------------------------------
+
+use crate::error::ApiError;
+use crate::state::AppState;
+use axum::{
+    extract::State,
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
+use biz_application::identity::{LoginCommand, RegisterCommand};
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/register",
+    responses((status = 201, description = "User registered successfully")),
+    tag = "Auth"
+)]
+pub async fn register_handler(
+    State(state): State<AppState>,
+    Json(cmd): Json<RegisterCommand>,
+) -> Result<impl IntoResponse, ApiError> {
+    let res = state.auth_use_cases.register(cmd).await?;
+    Ok((StatusCode::CREATED, Json(res)))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/login",
+    responses((status = 200, description = "Login successful")),
+    tag = "Auth"
+)]
+pub async fn login_handler(
+    State(state): State<AppState>,
+    Json(cmd): Json<LoginCommand>,
+) -> Result<impl IntoResponse, ApiError> {
+    let res = state.auth_use_cases.login(cmd).await?;
+    Ok((StatusCode::OK, Json(res)))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/me",
+    responses((status = 200, description = "Current user info")),
+    tag = "Auth"
+)]
+pub async fn me_handler(
+    State(_state): State<AppState>,
+    auth: crate::extractors::auth::AuthenticatedUser,
+) -> Result<impl IntoResponse, ApiError> {
+    Ok((StatusCode::OK, Json(serde_json::json!({ "user_id": auth.user_id }))))
+}
+
+--------------------------------------------------
+FILE: biz-api\src\handlers\discovery.rs
+--------------------------------------------------
+
+use crate::error::ApiError;
+use crate::state::AppState;
+use axum::{
+    extract::{Query, State},
+    response::IntoResponse,
+    Json,
+};
+use biz_application::discovery::SearchOpportunitiesRequest;
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/opportunities/search",
+    responses((status = 200, description = "Search results returned successfully")),
+    tag = "Discovery"
+)]
+pub async fn search_opportunities_handler(
+    State(state): State<AppState>,
+    Query(req): Query<SearchOpportunitiesRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let result = state.discovery_use_cases.search(req).await?;
+    Ok(Json(result))
+}
+
+--------------------------------------------------
+FILE: biz-api\src\handlers\governance.rs
+--------------------------------------------------
+
+use crate::error::ApiError;
+use crate::extractors::auth::AuthenticatedUser;
+use crate::state::AppState;
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
+use biz_application::governance::CreateReportCommand;
+use uuid::Uuid;
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/opportunities/{id}/reports",
+    responses((status = 201, description = "Opportunity reported")),
+    tag = "Governance"
+)]
+pub async fn report_opportunity_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(opportunity_id): Path<Uuid>,
+    Json(mut cmd): Json<CreateReportCommand>,
+) -> Result<impl IntoResponse, ApiError> {
+    cmd.opportunity_id = opportunity_id;
+    let report_id = state.gov_use_cases.report_opportunity(Some(auth.user_id), cmd).await?;
+    Ok((StatusCode::CREATED, Json(serde_json::json!({ "report_id": report_id }))))
+}
+
+--------------------------------------------------
+FILE: biz-api\src\handlers\mod.rs
+--------------------------------------------------
+
+pub mod application;
+pub mod auth;
+pub mod discovery;
+pub mod governance;
+pub mod opportunity;
+pub mod saved;
+
+--------------------------------------------------
+FILE: biz-api\src\handlers\opportunity.rs
+--------------------------------------------------
+
+use crate::error::ApiError;
+use crate::extractors::auth::AuthenticatedUser;
+use crate::state::AppState;
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
+use biz_application::opportunity::CreateOpportunityCommand;
+use uuid::Uuid;
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/companies/{company_id}/opportunities",
+    responses((status = 201, description = "Opportunity created")),
+    tag = "Opportunities"
+)]
+pub async fn create_opportunity_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(company_id): Path<Uuid>,
+    Json(mut cmd): Json<CreateOpportunityCommand>,
+) -> Result<impl IntoResponse, ApiError> {
+    cmd.company_id = company_id;
+    let opp = state.opp_use_cases.create_opportunity(auth.user_id, cmd).await?;
+    Ok((StatusCode::CREATED, Json(opp)))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/opportunities/{id}/publish",
+    responses((status = 200, description = "Opportunity published")),
+    tag = "Opportunities"
+)]
+pub async fn publish_opportunity_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    state.opp_use_cases.publish(auth.user_id, id).await?;
+    Ok(StatusCode::OK)
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/opportunities/{id}/pause",
+    responses((status = 200, description = "Opportunity paused")),
+    tag = "Opportunities"
+)]
+pub async fn pause_opportunity_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    state.opp_use_cases.pause(auth.user_id, id).await?;
+    Ok(StatusCode::OK)
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/opportunities/{id}/close",
+    responses((status = 200, description = "Opportunity closed")),
+    tag = "Opportunities"
+)]
+pub async fn close_opportunity_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    state.opp_use_cases.close(auth.user_id, id).await?;
+    Ok(StatusCode::OK)
+}
+
+--------------------------------------------------
+FILE: biz-api\src\handlers\saved.rs
+--------------------------------------------------
+
+use crate::error::ApiError;
+use crate::extractors::auth::AuthenticatedUser;
+use crate::state::AppState;
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
+use uuid::Uuid;
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/opportunities/{id}/save",
+    responses((status = 201, description = "Opportunity saved")),
+    tag = "Saved"
+)]
+pub async fn save_opportunity_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    state.saved_use_cases.save_opportunity(auth.user_id, id).await?;
+    Ok(StatusCode::CREATED)
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/opportunities/{id}/save",
+    responses((status = 200, description = "Opportunity unsaved")),
+    tag = "Saved"
+)]
+pub async fn remove_saved_opportunity_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    state.saved_use_cases.remove_saved_opportunity(auth.user_id, id).await?;
+    Ok(StatusCode::OK)
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/me/saved-opportunities",
+    responses((status = 200, description = "List saved items")),
+    tag = "Saved"
+)]
+pub async fn list_saved_opportunities_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+) -> Result<impl IntoResponse, ApiError> {
+    let items = state.saved_use_cases.list_saved_opportunities(auth.user_id).await?;
+    Ok(Json(items))
+}
+
+--------------------------------------------------
+FILE: biz-api\src\error.rs
+--------------------------------------------------
+
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    Json,
+};
+use biz_application::ApplicationError;
+use biz_storage::StorageError;
+use serde::Serialize;
+use uuid::Uuid;
+
+#[derive(Debug, Serialize)]
+pub struct ApiErrorPayload {
+    pub code: String,
+    pub message: String,
+    pub details: serde_json::Value,
+    pub request_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ApiErrorResponse {
+    pub error: ApiErrorPayload,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ApiError {
+    #[error("Application error: {0}")]
+    Application(#[from] ApplicationError),
+
+    #[error("Storage error: {0}")]
+    Storage(#[from] StorageError),
+
+    #[error("Unauthorized: {0}")]
+    Unauthorized(String),
+
+    #[error("Validation failed: {0}")]
+    Validation(String),
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        let request_id = Uuid::new_v4().to_string();
+        let (status, code, message) = match self {
+            ApiError::Application(ApplicationError::Validation(msg))
+            | ApiError::Validation(msg) => (StatusCode::BAD_REQUEST, "VALIDATION_ERROR", msg),
+            
+            ApiError::Application(ApplicationError::Unauthorized(msg))
+            | ApiError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, "UNAUTHORIZED", msg),
+            
+            ApiError::Storage(StorageError::InvalidCredentials) => (
+                StatusCode::UNAUTHORIZED,
+                "INVALID_CREDENTIALS",
+                "Email or password is incorrect".to_string(),
+            ),
+            
+            ApiError::Storage(StorageError::EmailAlreadyExists) => (
+                StatusCode::CONFLICT,
+                "EMAIL_ALREADY_EXISTS",
+                "A user with this email already exists".to_string(),
+            ),
+            
+            ApiError::Storage(StorageError::DuplicateApplication) => (
+                StatusCode::CONFLICT,
+                "DUPLICATE_APPLICATION",
+                "You have already applied for this opportunity".to_string(),
+            ),
+            
+            _ => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "INTERNAL_SERVER_ERROR",
+                "An unexpected internal error occurred".to_string(),
+            ),
+        };
+
+        let payload = ApiErrorResponse {
+            error: ApiErrorPayload {
+                code: code.to_string(),
+                message,
+                details: serde_json::json!({}),
+                request_id,
+            },
+        };
+
+        (status, Json(payload)).into_response()
+    }
+}
+
+--------------------------------------------------
+FILE: biz-api\src\main.rs
+--------------------------------------------------
+
+mod error;
+mod extractors;
+mod handlers;
+mod openapi;
+mod state;
+
+use axum::{
+    routing::{get, post},
+    Router,
+};
+use geo_storage::{create_connection_pool, run_migrations, DatabaseConfig};
+use openapi::ApiDoc;
+use state::AppState;
+use std::net::SocketAddr;
+use tower_http::cors::{Any, CorsLayer};
+use tower_http::trace::TraceLayer;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "biz_api=info,tower_http=info".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    tracing::info!("Initializing Map-First Business Backend API Service...");
+
+    let db_config = DatabaseConfig {
+        database_url: std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+            "postgres://map_user:map_password@localhost:5433/map_platform".to_string()
+        }),
+        max_connections: 20,
+        min_connections: 5,
+        connect_timeout_sec: 10,
+    };
+
+    let pool = create_connection_pool(&db_config).await?;
+    tracing::info!("Connected to PostgreSQL/PostGIS. Running business migrations...");
+    run_migrations(&pool).await?;
+    tracing::info!("Business migrations applied successfully.");
+
+    let jwt_secret = std::env::var("JWT_SECRET")
+        .unwrap_or_else(|_| "super-secret-jwt-key-change-in-production-123456".to_string());
+
+    let app_state = AppState::new(pool, jwt_secret);
+
+    // REST API Routes (/api/v1)
+    let api_router = Router::new()
+        // Auth
+        .route("/auth/register", post(handlers::auth::register_handler))
+        .route("/auth/login", post(handlers::auth::login_handler))
+        .route("/me", get(handlers::auth::me_handler))
+        // Discovery / Search
+        .route("/opportunities/search", get(handlers::discovery::search_opportunities_handler))
+        // Opportunities Lifecycle
+        .route("/companies/:company_id/opportunities", post(handlers::opportunity::create_opportunity_handler))
+        .route("/opportunities/:id/publish", post(handlers::opportunity::publish_opportunity_handler))
+        .route("/opportunities/:id/pause", post(handlers::opportunity::pause_opportunity_handler))
+        .route("/opportunities/:id/close", post(handlers::opportunity::close_opportunity_handler))
+        // Applications
+        .route("/opportunities/:id/applications", post(handlers::application::submit_application_handler))
+        .route("/applications/:id/status", post(handlers::application::change_application_status_handler))
+        // Saved Items
+        .route("/opportunities/:id/save", post(handlers::saved::save_opportunity_handler).delete(handlers::saved::remove_saved_opportunity_handler))
+        .route("/me/saved-opportunities", get(handlers::saved::list_saved_opportunities_handler))
+        // Governance / Reports
+        .route("/opportunities/:id/reports", post(handlers::governance::report_opportunity_handler));
+
+    let app = Router::new()
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
+        .nest("/api/v1", api_router)
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Any)
+                .allow_headers(Any),
+        )
+        .layer(TraceLayer::new_for_http())
+        .with_state(app_state);
+
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8081));
+    tracing::info!("Business API Server listening on http://{}", addr);
+    tracing::info!("Swagger UI available at http://{}/swagger-ui", addr);
+
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await?;
+
+    Ok(())
+}
+
+--------------------------------------------------
+FILE: biz-api\src\openapi.rs
+--------------------------------------------------
+
+use utoipa::OpenApi;
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        crate::handlers::auth::register_handler,
+        crate::handlers::auth::login_handler,
+        crate::handlers::auth::me_handler,
+        crate::handlers::discovery::search_opportunities_handler,
+        crate::handlers::opportunity::create_opportunity_handler,
+        crate::handlers::opportunity::publish_opportunity_handler,
+        crate::handlers::opportunity::pause_opportunity_handler,
+        crate::handlers::opportunity::close_opportunity_handler,
+        crate::handlers::application::submit_application_handler,
+        crate::handlers::application::change_application_status_handler,
+        crate::handlers::saved::save_opportunity_handler,
+        crate::handlers::saved::remove_saved_opportunity_handler,
+        crate::handlers::saved::list_saved_opportunities_handler,
+        crate::handlers::governance::report_opportunity_handler
+    ),
+    components(schemas()),
+    tags(
+        (name = "Auth", description = "Authentication & Identity management"),
+        (name = "Opportunities", description = "Opportunity lifecycle management"),
+        (name = "Discovery", description = "Search & Discovery orchestration"),
+        (name = "Applications", description = "Candidate job applications"),
+        (name = "Saved", description = "Saved opportunities & companies"),
+        (name = "Governance", description = "Reports & platform governance")
+    )
+)]
+pub struct ApiDoc;
+
+--------------------------------------------------
+FILE: biz-api\src\state.rs
+--------------------------------------------------
+
+use biz_application::application::ApplicationUseCases;
+use biz_application::candidate::CandidateUseCases;
+use biz_application::discovery::DiscoveryUseCases;
+use biz_application::governance::GovernanceUseCases;
+use biz_application::opportunity::OpportunityUseCases;
+use biz_application::saved::SavedUseCases;
+use biz_storage::{
+    ApplicationRepository, CandidateRepository, CompanyRepository, DiscoveryRepository,
+    GovernanceRepository, OpportunityRepository, SavedRepository, TokenRepository, TokenService,
+    UserRepository,
+};
+use sqlx::PgPool;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub pool: PgPool,
+    pub token_service: TokenService,
+    pub auth_use_cases: biz_application::identity::AuthUseCases,
+    pub opp_use_cases: OpportunityUseCases,
+    pub discovery_use_cases: DiscoveryUseCases,
+    pub candidate_use_cases: CandidateUseCases,
+    pub app_use_cases: ApplicationUseCases,
+    pub saved_use_cases: SavedUseCases,
+    pub gov_use_cases: GovernanceUseCases,
+}
+
+impl AppState {
+    pub fn new(pool: PgPool, jwt_secret: String) -> Self {
+        let user_repo = UserRepository::new(pool.clone());
+        let token_repo = TokenRepository::new(pool.clone());
+        let company_repo = CompanyRepository::new(pool.clone());
+        let opp_repo = OpportunityRepository::new(pool.clone());
+        let candidate_repo = CandidateRepository::new(pool.clone());
+        let app_repo = ApplicationRepository::new(pool.clone());
+        let saved_repo = SavedRepository::new(pool.clone());
+        let discovery_repo = DiscoveryRepository::new(pool.clone());
+        let gov_repo = GovernanceRepository::new(pool.clone());
+
+        let token_service = TokenService::new(jwt_secret);
+
+        let auth_use_cases = biz_application::identity::AuthUseCases::new(
+            user_repo.clone(),
+            token_repo.clone(),
+            token_service.clone(),
+        );
+        let opp_use_cases = OpportunityUseCases::new(opp_repo.clone(), company_repo.clone());
+        let discovery_use_cases = DiscoveryUseCases::new(discovery_repo);
+        let candidate_use_cases = CandidateUseCases::new(candidate_repo.clone());
+        let app_use_cases = ApplicationUseCases::new(
+            app_repo,
+            opp_repo.clone(),
+            candidate_repo.clone(),
+            company_repo.clone(),
+        );
+        let saved_use_cases = SavedUseCases::new(saved_repo, candidate_repo.clone());
+        let gov_use_cases = GovernanceUseCases::new(gov_repo, company_repo);
+
+        Self {
+            pool,
+            token_service,
+            auth_use_cases,
+            opp_use_cases,
+            discovery_use_cases,
+            candidate_use_cases,
+            app_use_cases,
+            saved_use_cases,
+            gov_use_cases,
+        }
+    }
+}
+
+--------------------------------------------------
+FILE: biz-api\Cargo.toml
+--------------------------------------------------
+
+[package]
+name = "biz-api"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+biz-domain = { path = "../../crates/biz-domain" }
+biz-storage = { path = "../../crates/biz-storage" }
+biz-application = { path = "../../crates/biz-application" }
+geo-types = { path = "../../crates/geo-types" }
+geo-storage = { path = "../../crates/geo-storage" }
+
+axum.workspace = true
+tokio.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+sqlx.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+utoipa.workspace = true
+utoipa-swagger-ui.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+rust_decimal.workspace = true
+
+--------------------------------------------------
+FILE: geo-importer\src\cli.rs
+--------------------------------------------------
+
+use clap::Parser;
+use std::path::PathBuf;
+
+#[derive(Parser, Debug)]
+#[command(name = "geo-importer")]
+#[command(about = "High-performance streaming geospatial data importer for OpenStreetMap & Custom Data")]
+pub struct CliArgs {
+    /// Path to the .osm.pbf file (e.g. data/iran-latest.osm.pbf)
+    #[arg(short, long)]
+    pub file: Option<PathBuf>,
+
+    /// Batch size for bulk database inserts
+    #[arg(short, long, default_value_t = 500)]
+    pub batch_size: usize,
+
+    /// Seed sample opportunity locations for testing
+    #[arg(long, default_value_t = false)]
+    pub seed_samples: bool,
+
+    /// PostgreSQL Database URL
+    #[arg(long)]
+    pub database_url: Option<String>,
+}
+
+--------------------------------------------------
+FILE: geo-importer\src\error.rs
+--------------------------------------------------
+
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum ImporterError {
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("OSM PBF parsing error: {0}")]
+    Osm(#[from] osmpbf::Error),
+
+    #[error("Database error: {0}")]
+    Database(#[from] sqlx::Error),
+
+    #[error("Validation error: {0}")]
+    Validation(String),
+}
+
+--------------------------------------------------
+FILE: geo-importer\src\main.rs
+--------------------------------------------------
+
+mod cli;
+mod error;
+mod osm_parser;
+mod pipeline;
+
+use clap::Parser;
+use cli::CliArgs;
+use error::ImporterError;
+use geo_storage::{create_connection_pool, run_migrations, DatabaseConfig};
+use osm_parser::{ExtractedOsmPoint, ExtractedOsmRoad};
+use pipeline::{insert_osm_batch, insert_roads_batch};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    let args = CliArgs::parse();
+
+    let db_url = args
+        .database_url
+        .or_else(|| std::env::var("DATABASE_URL").ok())
+        .unwrap_or_else(|| {
+            "postgres://map_user:map_password@localhost:5433/map_platform".to_string()
+        });
+
+    let db_config = DatabaseConfig {
+        database_url: db_url,
+        max_connections: 10,
+        min_connections: 2,
+        connect_timeout_sec: 10,
+    };
+
+    tracing::info!("Connecting to PostGIS database...");
+    let pool = create_connection_pool(&db_config).await?;
+    run_migrations(&pool).await?;
+
+    if let Some(pbf_path) = args.file {
+        tracing::info!("Processing real OSM data from PBF: {:?}", pbf_path);
+
+        let (points_tx, mut points_rx) = tokio::sync::mpsc::channel::<Vec<ExtractedOsmPoint>>(16);
+        let (roads_tx, mut roads_rx) = tokio::sync::mpsc::channel::<Vec<ExtractedOsmRoad>>(16);
+        let batch_size = args.batch_size;
+
+        // Producer Thread: Streaming parse of actual nodes and ways
+        let producer_handle = tokio::task::spawn_blocking(move || {
+            osm_parser::stream_osm_pbf_full(
+                &pbf_path,
+                |batch| {
+                    if points_tx.blocking_send(batch).is_err() {
+                        return Err(ImporterError::Validation("Points channel closed".into()));
+                    }
+                    Ok(())
+                },
+                |batch| {
+                    if roads_tx.blocking_send(batch).is_err() {
+                        return Err(ImporterError::Validation("Roads channel closed".into()));
+                    }
+                    Ok(())
+                },
+                batch_size,
+            )
+        });
+
+        // Consumers: Concurrently write real points and real road centerlines
+        let pool_for_points = pool.clone();
+        let points_consumer = tokio::spawn(async move {
+            let mut count = 0;
+            while let Some(batch) = points_rx.recv().await {
+                let len = batch.len();
+                let _ = insert_osm_batch(&pool_for_points, &batch).await;
+                count += len;
+                if count % 20000 == 0 {
+                    tracing::info!("Imported {} real place/amenity locations...", count);
+                }
+            }
+            count
+        });
+
+        let pool_for_roads = pool.clone();
+        let roads_consumer = tokio::spawn(async move {
+            let mut count = 0;
+            while let Some(batch) = roads_rx.recv().await {
+                let len = batch.len();
+                let _ = insert_roads_batch(&pool_for_roads, &batch).await;
+                count += len;
+                if count % 10000 == 0 {
+                    tracing::info!("Imported {} real road linestrings...", count);
+                }
+            }
+            count
+        });
+
+        let _ = producer_handle.await??;
+        let total_points = points_consumer.await?;
+        let total_roads = roads_consumer.await?;
+
+        tracing::info!(
+            "REAL DATA IMPORT COMPLETED! Successfully ingested {} real locations and {} real road centerlines directly into PostGIS.",
+            total_points,
+            total_roads
+        );
+    }
+
+    Ok(())
+}
+
+--------------------------------------------------
+FILE: geo-importer\src\osm_parser.rs
+--------------------------------------------------
+
+use crate::error::ImporterError;
+use geo_types::GeoPoint;
+use osmpbf::{Element, ElementReader};
+use std::collections::HashMap;
+use std::path::Path;
+
+#[derive(Debug, Clone)]
+pub struct ExtractedOsmPoint {
+    pub osm_id: i64,
+    pub point: GeoPoint,
+    pub name: Option<String>,
+    pub category: String,
+    pub tags: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExtractedOsmRoad {
+    pub osm_id: i64,
+    pub name: Option<String>,
+    pub highway: String,
+    pub line_wkt: String,
+}
+
+/// Streams real points and road linestrings from OSM PBF file.
+pub fn stream_osm_pbf_full<FPoints, FRoads>(
+    pbf_path: &Path,
+    mut on_points_batch: FPoints,
+    mut on_roads_batch: FRoads,
+    batch_size: usize,
+) -> Result<(usize, usize), ImporterError>
+where
+    FPoints: FnMut(Vec<ExtractedOsmPoint>) -> Result<(), ImporterError>,
+    FRoads: FnMut(Vec<ExtractedOsmRoad>) -> Result<(), ImporterError>,
+{
+    let reader = ElementReader::from_path(pbf_path)?;
+    let mut node_coords: HashMap<i64, (f32, f32)> = HashMap::new();
+    let mut points_batch = Vec::with_capacity(batch_size);
+    let mut roads_batch = Vec::with_capacity(batch_size);
+
+    let mut total_points = 0;
+    let mut total_roads = 0;
+
+    tracing::info!("Parsing OSM elements (Points and Highways)...");
+
+    reader.for_each(|element| {
+        match element {
+            Element::DenseNode(node) => {
+                let lon = node.lon();
+                let lat = node.lat();
+                node_coords.insert(node.id, (lon as f32, lat as f32));
+
+                let mut tags_map = HashMap::new();
+                let mut name = None;
+                let mut category = None;
+
+                for (key, val) in node.tags() {
+                    tags_map.insert(key.to_string(), val.to_string());
+                    if key == "name:fa" {
+                        name = Some(val.to_string());
+                    } else if key == "name" && name.is_none() {
+                        name = Some(val.to_string());
+                    } else if key == "office" || key == "amenity" || key == "shop" || key == "place" {
+                        category = Some(format!("{}:{}", key, val));
+                    }
+                }
+
+                if let (Some(cat), Ok(pt)) = (category, GeoPoint::new(lon, lat)) {
+                    points_batch.push(ExtractedOsmPoint {
+                        osm_id: node.id,
+                        point: pt,
+                        name,
+                        category: cat,
+                        tags: tags_map,
+                    });
+
+                    if points_batch.len() >= batch_size {
+                        total_points += points_batch.len();
+                        let batch = std::mem::replace(&mut points_batch, Vec::with_capacity(batch_size));
+                        let _ = on_points_batch(batch);
+                    }
+                }
+            }
+            Element::Way(way) => {
+                let mut highway = None;
+                let mut name = None;
+
+                for (k, v) in way.tags() {
+                    if k == "highway" {
+                        highway = Some(v.to_string());
+                    } else if k == "name:fa" {
+                        name = Some(v.to_string());
+                    } else if k == "name" && name.is_none() {
+                        name = Some(v.to_string());
+                    }
+                }
+
+                if let Some(hw) = highway {
+                    let mut coords_str = Vec::new();
+                    for node_id in way.refs() {
+                        if let Some(&(lon, lat)) = node_coords.get(&node_id) {
+                            coords_str.push(format!("{:.6} {:.6}", lon, lat));
+                        }
+                    }
+
+                    if coords_str.len() >= 2 {
+                        let wkt = format!("LINESTRING({})", coords_str.join(", "));
+                        roads_batch.push(ExtractedOsmRoad {
+                            osm_id: way.id(),
+                            name,
+                            highway: hw,
+                            line_wkt: wkt,
+                        });
+
+                        if roads_batch.len() >= batch_size {
+                            total_roads += roads_batch.len();
+                            let batch = std::mem::replace(&mut roads_batch, Vec::with_capacity(batch_size));
+                            let _ = on_roads_batch(batch);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    })?;
+
+    if !points_batch.is_empty() {
+        total_points += points_batch.len();
+        on_points_batch(points_batch)?;
+    }
+
+    if !roads_batch.is_empty() {
+        total_roads += roads_batch.len();
+        on_roads_batch(roads_batch)?;
+    }
+
+    Ok((total_points, total_roads))
+}
+
+--------------------------------------------------
+FILE: geo-importer\src\pipeline.rs
+--------------------------------------------------
+
+use crate::error::ImporterError;
+use crate::osm_parser::{ExtractedOsmPoint, ExtractedOsmRoad};
+use sqlx::PgPool;
+
+/// High-performance bulk insert for real OSM road centerlines
+pub async fn insert_roads_batch(
+    pool: &PgPool,
+    roads: &[ExtractedOsmRoad],
+) -> Result<u64, ImporterError> {
+    if roads.is_empty() {
+        return Ok(0);
+    }
+
+    let mut ids = Vec::with_capacity(roads.len());
+    let mut names = Vec::with_capacity(roads.len());
+    let mut highways = Vec::with_capacity(roads.len());
+    let mut wkts = Vec::with_capacity(roads.len());
+
+    for r in roads {
+        ids.push(r.osm_id);
+        names.push(r.name.clone());
+        highways.push(r.highway.clone());
+        wkts.push(r.line_wkt.clone());
+    }
+
+    let sql = r#"
+        INSERT INTO osm_roads (id, name, highway, geom)
+        SELECT 
+            u.id,
+            u.name,
+            u.highway,
+            ST_SetSRID(ST_GeomFromText(u.wkt), 4326)
+        FROM UNNEST(
+            $1::bigint[],
+            $2::text[],
+            $3::text[],
+            $4::text[]
+        ) AS u(id, name, highway, wkt)
+        ON CONFLICT (id) DO NOTHING
+    "#;
+
+    sqlx::query(sql)
+        .bind(&ids)
+        .bind(&names)
+        .bind(&highways)
+        .bind(&wkts)
+        .execute(pool)
+        .await?;
+
+    Ok(roads.len() as u64)
+}
+
+/// Bulk insert for points/amenities/places
+pub async fn insert_osm_batch(
+    pool: &PgPool,
+    points: &[ExtractedOsmPoint],
+) -> Result<u64, ImporterError> {
+    if points.is_empty() {
+        return Ok(0);
+    }
+
+    let mut lons = Vec::with_capacity(points.len());
+    let mut lats = Vec::with_capacity(points.len());
+    let mut names = Vec::with_capacity(points.len());
+    let mut source_ids = Vec::with_capacity(points.len());
+    let mut metadatas = Vec::with_capacity(points.len());
+
+    for p in points {
+        lons.push(p.point.longitude());
+        lats.push(p.point.latitude());
+        names.push(p.name.clone());
+        source_ids.push(p.osm_id.to_string());
+        metadatas.push(serde_json::to_value(&p.tags).unwrap_or_else(|_| serde_json::json!({})));
+    }
+
+    let sql = r#"
+        INSERT INTO locations (
+            coordinates,
+            address_summary,
+            precision,
+            source,
+            source_id,
+            metadata
+        )
+        SELECT 
+            ST_SetSRID(ST_MakePoint(u.lon, u.lat), 4326),
+            u.name,
+            'rooftop',
+            'osm',
+            u.source_id,
+            u.meta
+        FROM UNNEST(
+            $1::float8[],
+            $2::float8[],
+            $3::text[],
+            $4::text[],
+            $5::jsonb[]
+        ) AS u(lon, lat, name, source_id, meta)
+        ON CONFLICT (source, source_id) 
+        DO UPDATE SET
+            address_summary = EXCLUDED.address_summary,
+            metadata = EXCLUDED.metadata,
+            updated_at = NOW()
+    "#;
+
+    sqlx::query(sql)
+        .bind(&lons)
+        .bind(&lats)
+        .bind(&names)
+        .bind(&source_ids)
+        .bind(&metadatas)
+        .execute(pool)
+        .await?;
+
+    Ok(points.len() as u64)
+}
+
+--------------------------------------------------
+FILE: geo-importer\Cargo.toml
+--------------------------------------------------
+
+[package]
+name = "geo-importer"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+geo-types = { path = "../../crates/geo-types" }
+geo-domain = { path = "../../crates/geo-domain" }
+geo-storage = { path = "../../crates/geo-storage" }
+clap.workspace = true
+osmpbf = "0.3"
+tokio.workspace = true
+sqlx.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+--------------------------------------------------
+FILE: map-api\src\dto\mod.rs
+--------------------------------------------------
+
+pub mod requests;
+
+pub use requests::{BBoxQueryParams, CreateLocationRequest, NearbyQueryParams};
+
+--------------------------------------------------
+FILE: map-api\src\dto\requests.rs
+--------------------------------------------------
+
+use crate::error::ApiError;
+use geo_domain::LocationPrecision;
+use geo_types::{BoundingBox, GeoPoint, Radius};
+use serde::Deserialize;
+
+#[derive(Debug, Deserialize)]
+pub struct BBoxQueryParams {
+    pub bbox: String,
+    pub zoom: Option<u8>,
+    pub limit: Option<usize>,
+    pub source: Option<String>,
+}
+
+impl BBoxQueryParams {
+    pub fn parse_bbox(&self) -> Result<BoundingBox, ApiError> {
+        let parts: Vec<&str> = self.bbox.split(',').map(|s| s.trim()).collect();
+        if parts.len() != 4 {
+            return Err(ApiError::Validation(
+                "Bounding box must be formatted as 'west,south,east,north'".to_string(),
+            ));
+        }
+
+        let west: f64 = parts[0].parse().map_err(|_| ApiError::Validation("Invalid west coordinate".into()))?;
+        let south: f64 = parts[1].parse().map_err(|_| ApiError::Validation("Invalid south coordinate".into()))?;
+        let east: f64 = parts[2].parse().map_err(|_| ApiError::Validation("Invalid east coordinate".into()))?;
+        let north: f64 = parts[3].parse().map_err(|_| ApiError::Validation("Invalid north coordinate".into()))?;
+
+        BoundingBox::new(west, south, east, north)
+            .map_err(|e| ApiError::Validation(e.to_string()))
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NearbyQueryParams {
+    pub lat: f64,
+    pub lon: f64,
+    pub radius: f64,
+    pub limit: Option<usize>,
+}
+
+impl NearbyQueryParams {
+    pub fn parse_point_and_radius(&self) -> Result<(GeoPoint, Radius), ApiError> {
+        let pt = GeoPoint::new(self.lon, self.lat)
+            .map_err(|e| ApiError::Validation(e.to_string()))?;
+        let rad = Radius::from_meters(self.radius)
+            .map_err(|e| ApiError::Validation(e.to_string()))?;
+        Ok((pt, rad))
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateLocationRequest {
+    pub longitude: f64,
+    pub latitude: f64,
+    pub address_summary: Option<String>,
+    pub precision: Option<LocationPrecision>,
+    pub source: Option<String>,
+    pub source_id: Option<String>,
+    pub metadata: Option<serde_json::Value>,
+}
+
+--------------------------------------------------
+FILE: map-api\src\handlers\geocoding.rs
+--------------------------------------------------
+
+use crate::error::ApiError;
+use crate::state::AppState;
+use axum::{
+    extract::{Query, State},
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
+use geo_geocoding::{find_areas_by_parent, reverse_geocode_point};
+use geo_types::GeoPoint;
+use serde::Deserialize;
+use uuid::Uuid;
+
+#[derive(Debug, Deserialize)]
+pub struct ReverseGeocodeQuery {
+    pub lat: f64,
+    pub lon: f64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AdminAreasQuery {
+    pub parent_id: Option<Uuid>,
+}
+
+pub async fn reverse_geocode_handler(
+    State(state): State<AppState>,
+    Query(params): Query<ReverseGeocodeQuery>,
+) -> Result<impl IntoResponse, ApiError> {
+    let point = GeoPoint::new(params.lon, params.lat)
+        .map_err(|e| ApiError::Validation(e.to_string()))?;
+
+    match reverse_geocode_point(&state.pool, &point).await {
+        Ok(Some(result)) => Ok(Json(result)),
+        Ok(None) => Err(ApiError::NotFound(
+            "No administrative area found containing these coordinates".to_string(),
+        )),
+        Err(e) => Err(ApiError::Validation(e.to_string())),
+    }
+}
+
+pub async fn list_admin_areas_handler(
+    State(state): State<AppState>,
+    Query(params): Query<AdminAreasQuery>,
+) -> Result<impl IntoResponse, ApiError> {
+    let areas = find_areas_by_parent(&state.pool, params.parent_id)
+        .await
+        .map_err(|e| ApiError::Validation(e.to_string()))?;
+
+    Ok(Json(areas))
+}
+
+--------------------------------------------------
+FILE: map-api\src\handlers\health.rs
+--------------------------------------------------
+
+use crate::state::AppState;
+use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
+use serde_json::json;
+
+pub async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
+    match sqlx::query("SELECT 1").execute(&state.pool).await {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(json!({ "status": "healthy", "database": "connected" })),
+        ),
+        Err(err) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({ "status": "unhealthy", "database_error": err.to_string() })),
+        ),
+    }
+}
+
+--------------------------------------------------
+FILE: map-api\src\handlers\locations.rs
+--------------------------------------------------
+
+use crate::dto::CreateLocationRequest;
+use crate::error::ApiError;
+use crate::state::AppState;
+use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
+use geo_domain::{LocationPrecision, NewLocation};
+use geo_types::GeoPoint;
+
+pub async fn create_location(
+    State(state): State<AppState>,
+    Json(payload): Json<CreateLocationRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let point = GeoPoint::new(payload.longitude, payload.latitude)
+        .map_err(|e| ApiError::Validation(e.to_string()))?;
+
+    let new_loc = NewLocation {
+        point,
+        address_summary: payload.address_summary,
+        precision: payload.precision.unwrap_or(LocationPrecision::Exact),
+        source: payload.source.unwrap_or_else(|| "api".to_string()),
+        source_id: payload.source_id,
+        metadata: payload.metadata.unwrap_or_else(|| serde_json::json!({})),
+    };
+
+    let created = state.location_repo.insert(&new_loc).await?;
+    Ok((StatusCode::CREATED, Json(created)))
+}
+
+--------------------------------------------------
+FILE: map-api\src\handlers\map.rs
+--------------------------------------------------
+
+use crate::dto::{BBoxQueryParams, NearbyQueryParams};
+use crate::error::ApiError;
+use crate::state::AppState;
+use axum::{
+    extract::{Query, State},
+    response::IntoResponse,
+    Json,
+};
+use geo_presentation::{ClusterFeature, FeatureCollection, LocationProperties, MapFeature};
+use geo_query::{bbox_query::BBoxSearchOptions, cluster_locations_in_bbox, find_locations_in_bbox, find_locations_within_radius};
+use serde_json::Value;
+
+pub async fn search_viewport(
+    State(state): State<AppState>,
+    Query(params): Query<BBoxQueryParams>,
+) -> Result<impl IntoResponse, ApiError> {
+    let bbox = params.parse_bbox()?;
+    let zoom = params.zoom.unwrap_or(12);
+
+    if zoom < 11 {
+        let grid_size = match zoom {
+            0..=5 => 1.0,
+            6..=8 => 0.25,
+            _ => 0.08,
+        };
+
+        let clusters = cluster_locations_in_bbox(&state.pool, &bbox, grid_size).await?;
+        let cluster_features: Vec<ClusterFeature> = clusters.into_iter().map(ClusterFeature::from).collect();
+        let collection = FeatureCollection::new(cluster_features);
+        Ok(Json(serde_json::to_value(collection).unwrap()))
+    } else {
+        let options = BBoxSearchOptions {
+            limit: params.limit,
+            source: params.source,
+        };
+        let locations = find_locations_in_bbox(&state.pool, &bbox, options).await?;
+        let features: Vec<MapFeature<LocationProperties>> = locations.into_iter().map(MapFeature::from).collect();
+        let collection = FeatureCollection::new(features);
+        Ok(Json(serde_json::to_value(collection).unwrap()))
+    }
+}
+
+pub async fn search_nearby(
+    State(state): State<AppState>,
+    Query(params): Query<NearbyQueryParams>,
+) -> Result<impl IntoResponse, ApiError> {
+    let (center, radius) = params.parse_point_and_radius()?;
+    let results = find_locations_within_radius(&state.pool, &center, &radius, params.limit).await?;
+
+    let features: Vec<Value> = results
+        .into_iter()
+        .map(|item| {
+            serde_json::json!({
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": item.location.point.to_coordinates()
+                },
+                "properties": {
+                    "id": item.location.id,
+                    "address_summary": item.location.address_summary,
+                    "distance_meters": item.distance.as_meters()
+                }
+            })
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!({
+        "type": "FeatureCollection",
+        "features": features
+    })))
+}
+
+--------------------------------------------------
+FILE: map-api\src\handlers\mod.rs
+--------------------------------------------------
+
+pub mod geocoding;
+pub mod health;
+pub mod locations;
+pub mod map;
+pub mod tiles;
+
+--------------------------------------------------
+FILE: map-api\src\handlers\tiles.rs
+--------------------------------------------------
+
+use crate::error::ApiError;
+use crate::state::AppState;
+use axum::{
+    extract::{Path, State},
+    http::{header, HeaderMap, StatusCode},
+    response::IntoResponse,
+};
+use geo_tiles::{get_base_map_mvt_tile, get_locations_mvt_tile, TileCoordinate};
+
+/// Serves multi-layer Base Map Vector Tiles (Roads, Boundaries, Places) from PostGIS.
+pub async fn serve_base_map_tile(
+    State(state): State<AppState>,
+    Path((z, x, tile_str)): Path<(u8, u32, String)>,
+) -> Result<impl IntoResponse, ApiError> {
+    let y_str = tile_str
+        .strip_suffix(".mvt")
+        .or_else(|| tile_str.strip_suffix(".pbf"))
+        .unwrap_or(&tile_str);
+
+    let y: u32 = y_str
+        .parse()
+        .map_err(|_| ApiError::Validation(format!("Invalid tile Y coordinate: {tile_str}")))?;
+
+    let tile = TileCoordinate::new(z, x, y)?;
+    let pbf_bytes = get_base_map_mvt_tile(&state.pool, &tile)
+        .await
+        .map_err(|e| ApiError::Validation(e.to_string()))?;
+
+    let mut headers = HeaderMap::new();
+    headers.insert(header::CONTENT_TYPE, "application/x-protobuf".parse().unwrap());
+    headers.insert(header::CACHE_CONTROL, "public, max-age=3600".parse().unwrap());
+
+    Ok((StatusCode::OK, headers, pbf_bytes))
+}
+
+/// Serves dynamic Locations layer MVT.
+pub async fn serve_vector_tile(
+    State(state): State<AppState>,
+    Path((z, x, tile_str)): Path<(u8, u32, String)>,
+) -> Result<impl IntoResponse, ApiError> {
+    let y_str = tile_str
+        .strip_suffix(".mvt")
+        .or_else(|| tile_str.strip_suffix(".pbf"))
+        .unwrap_or(&tile_str);
+
+    let y: u32 = y_str
+        .parse()
+        .map_err(|_| ApiError::Validation(format!("Invalid tile Y coordinate: {tile_str}")))?;
+
+    let tile = TileCoordinate::new(z, x, y)?;
+    let pbf_bytes = get_locations_mvt_tile(&state.pool, &tile)
+        .await
+        .map_err(|e| ApiError::Validation(e.to_string()))?;
+
+    let mut headers = HeaderMap::new();
+    headers.insert(header::CONTENT_TYPE, "application/x-protobuf".parse().unwrap());
+    headers.insert(header::CACHE_CONTROL, "public, max-age=300".parse().unwrap());
+
+    Ok((StatusCode::OK, headers, pbf_bytes))
+}
+
+--------------------------------------------------
+FILE: map-api\src\error.rs
+--------------------------------------------------
+
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    Json,
+};
+use geo_query::QueryError;
+use geo_storage::StorageError;
+use geo_tiles::TileError;
+use geo_types::GeoError;
+use serde::Serialize;
+
+#[derive(Debug, Serialize)]
+pub struct ApiErrorPayload {
+    pub code: String,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ApiErrorResponse {
+    pub error: ApiErrorPayload,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ApiError {
+    #[error("Geospatial validation failed: {0}")]
+    Validation(String),
+
+    #[error("Not found: {0}")]
+    NotFound(String),
+
+    #[error("Storage error: {0}")]
+    Storage(#[from] StorageError),
+
+    #[error("Spatial query failed: {0}")]
+    Query(#[from] QueryError),
+
+    #[error("Tile error: {0}")]
+    Tile(#[from] TileError),
+
+    #[error("Internal database error")]
+    Database(#[from] sqlx::Error),
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        let (status, code, message) = match self {
+            ApiError::Validation(msg) => (StatusCode::BAD_REQUEST, "INVALID_INPUT", msg),
+            ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, "NOT_FOUND", msg),
+            ApiError::Storage(StorageError::NotFound(id)) => (
+                StatusCode::NOT_FOUND,
+                "NOT_FOUND",
+                format!("Resource with id {id} was not found"),
+            ),
+            ApiError::Storage(StorageError::Domain(geo_err)) => (
+                StatusCode::BAD_REQUEST,
+                "INVALID_COORDINATES",
+                geo_err.to_string(),
+            ),
+            ApiError::Query(QueryError::LimitExceeded { requested, max }) => (
+                StatusCode::BAD_REQUEST,
+                "LIMIT_EXCEEDED",
+                format!("Requested limit {requested} exceeds maximum allowable limit of {max}"),
+            ),
+            ApiError::Query(QueryError::Domain(GeoError::InvalidBoundingBoxLatitude { .. }))
+            | ApiError::Query(QueryError::Domain(GeoError::InvalidBoundingBoxLongitude { .. })) => (
+                StatusCode::BAD_REQUEST,
+                "INVALID_BBOX",
+                "Bounding box coordinates are invalid or inverted".to_string(),
+            ),
+            ApiError::Tile(TileError::InvalidZoom(z)) => (
+                StatusCode::BAD_REQUEST,
+                "INVALID_ZOOM",
+                format!("Zoom level {z} is outside valid range (0-22)"),
+            ),
+            ApiError::Tile(TileError::TileXOutOfBounds { .. })
+            | ApiError::Tile(TileError::TileYOutOfBounds { .. }) => (
+                StatusCode::BAD_REQUEST,
+                "TILE_OUT_OF_BOUNDS",
+                "Requested tile coordinate is out of bounds for the given zoom level".to_string(),
+            ),
+            _ => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "INTERNAL_SERVER_ERROR",
+                "An unexpected internal error occurred".to_string(),
+            ),
+        };
+
+        let payload = ApiErrorResponse {
+            error: ApiErrorPayload {
+                code: code.to_string(),
+                message,
+            },
+        };
+
+        (status, Json(payload)).into_response()
+    }
+}
+
+--------------------------------------------------
+FILE: map-api\src\main.rs
+--------------------------------------------------
+
+mod dto;
+mod error;
+mod handlers;
+mod state;
+
+use axum::{
+    routing::{get, post},
+    Router,
+};
+use geo_storage::{create_connection_pool, run_migrations, DatabaseConfig};
+use state::AppState;
+use std::net::SocketAddr;
+use tower_http::cors::{Any, CorsLayer};
+use tower_http::trace::TraceLayer;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "map_api=info,tower_http=info".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    tracing::info!("Initializing Geospatial Map API Service...");
+
+    let db_config = DatabaseConfig {
+        database_url: std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+            "postgres://map_user:map_password@localhost:5433/map_platform".to_string()
+        }),
+        max_connections: 20,
+        min_connections: 5,
+        connect_timeout_sec: 10,
+    };
+
+    let pool = create_connection_pool(&db_config).await?;
+    tracing::info!("Connected to PostgreSQL/PostGIS. Running migrations...");
+    run_migrations(&pool).await?;
+    tracing::info!("Migrations applied successfully.");
+
+    let app_state = AppState::new(pool);
+
+    let app = Router::new()
+        .route("/healthz", get(handlers::health::health_check))
+        .route("/api/v1/map/features", get(handlers::map::search_viewport))
+        .route("/api/v1/map/nearby", get(handlers::map::search_nearby))
+        .route("/api/v1/locations", post(handlers::locations::create_location))
+        .route("/api/v1/tiles/:z/:x/:tile", get(handlers::tiles::serve_vector_tile))
+        .route("/api/v1/base-tiles/:z/:x/:tile", get(handlers::tiles::serve_base_map_tile))
+        .route("/api/v1/reverse-geocoding", get(handlers::geocoding::reverse_geocode_handler))
+        .route("/api/v1/admin/areas", get(handlers::geocoding::list_admin_areas_handler))
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Any)
+                .allow_headers(Any),
+        )
+        .layer(TraceLayer::new_for_http())
+        .with_state(app_state);
+
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+    tracing::info!("Map Platform HTTP server listening on http://{}", addr);
+
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await?;
+
+    Ok(())
+}
+
+--------------------------------------------------
+FILE: map-api\src\state.rs
+--------------------------------------------------
+
+use geo_storage::LocationRepository;
+use sqlx::PgPool;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub pool: PgPool,
+    pub location_repo: LocationRepository,
+}
+
+impl AppState {
+    pub fn new(pool: PgPool) -> Self {
+        let location_repo = LocationRepository::new(pool.clone());
+        Self { pool, location_repo }
+    }
+}
+
+--------------------------------------------------
+FILE: map-api\Cargo.toml
+--------------------------------------------------
+
+[package]
+name = "map-api"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+geo-types = { path = "../../crates/geo-types" }
+geo-domain = { path = "../../crates/geo-domain" }
+geo-storage = { path = "../../crates/geo-storage" }
+geo-query = { path = "../../crates/geo-query" }
+geo-presentation = { path = "../../crates/geo-presentation" }
+geo-tiles = { path = "../../crates/geo-tiles" }
+geo-geocoding = { path = "../../crates/geo-geocoding" }
+
+axum.workspace = true
+tokio.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+sqlx.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+thiserror.workspace = true

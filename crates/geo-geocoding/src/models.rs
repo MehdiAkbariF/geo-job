@@ -1,8 +1,9 @@
 use geo_types::GeoPoint;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub struct AdministrativeArea {
     pub id: Uuid,
     pub parent_id: Option<Uuid>,
@@ -11,11 +12,12 @@ pub struct AdministrativeArea {
     pub area_type: String,
     pub name: String,
     pub name_en: Option<String>,
+    #[schema(value_type = Option<[f64; 2]>)]
     pub center: Option<GeoPoint>,
     pub metadata: serde_json::Value,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub struct AreaBreadcrumb {
     pub id: Uuid,
     pub level: i32,
@@ -23,8 +25,7 @@ pub struct AreaBreadcrumb {
     pub name: String,
 }
 
-/// Fully structured 4-tier Reverse Geocoding model (City, Neighborhood, Street, POI)
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub struct ReverseGeocodeResult {
     pub formatted_address: String,
     pub country_code: String,

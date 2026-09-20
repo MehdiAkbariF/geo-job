@@ -1,1803 +1,161 @@
-﻿======================================================================
-FILE: C:\Users\Raven\geo-job\Cargo.toml
-======================================================================
-[workspace]
-resolver = "2"
-members = [
-    "crates/geo-types",
-    "crates/geo-domain",
-    "crates/geo-storage",
-    "crates/geo-query",
-    "crates/geo-presentation",
-    "crates/geo-tiles",
-    "crates/geo-geocoding",
-    "crates/biz-domain",
-    "crates/biz-storage",
-    "crates/biz-application",
-    "apps/map-api",
-    "apps/geo-importer",
-    "apps/biz-api",
-]
+﻿=========================================
+PROJECT TREE STRUCTURE
+=========================================
+  |-- biz-application
+  |-- biz-domain
+  |-- biz-storage
+  |-- geo-domain
+  |-- geo-geocoding
+  |-- geo-presentation
+  |-- geo-query
+  |-- geo-storage
+  |-- geo-tiles
+  |-- geo-types
+  |-- project_code_and_tree.txt
+    |-- src
+    |-- Cargo.toml
+      |-- application
+      |-- candidate
+      |-- discovery
+      |-- governance
+      |-- identity
+      |-- opportunity
+      |-- saved
+      |-- error.rs
+      |-- lib.rs
+        |-- dto.rs
+        |-- mod.rs
+        |-- use_cases.rs
+        |-- dto.rs
+        |-- mod.rs
+        |-- use_cases.rs
+        |-- dto.rs
+        |-- mod.rs
+        |-- use_cases.rs
+        |-- dto.rs
+        |-- mod.rs
+        |-- use_cases.rs
+        |-- auth_use_cases.rs
+        |-- dto.rs
+        |-- mod.rs
+        |-- dto.rs
+        |-- mod.rs
+        |-- use_cases.rs
+        |-- dto.rs
+        |-- mod.rs
+        |-- use_cases.rs
+    |-- src
+    |-- Cargo.toml
+      |-- application
+      |-- candidate
+      |-- company
+      |-- discovery
+      |-- governance
+      |-- identity
+      |-- opportunity
+      |-- saved
+      |-- taxonomy
+      |-- error.rs
+      |-- lib.rs
+        |-- entity.rs
+        |-- lifecycle.rs
+        |-- mod.rs
+        |-- entity.rs
+        |-- mod.rs
+        |-- entity.rs
+        |-- membership.rs
+        |-- mod.rs
+        |-- mod.rs
+        |-- query.rs
+        |-- read_model.rs
+        |-- audit.rs
+        |-- mod.rs
+        |-- moderation.rs
+        |-- verification.rs
+        |-- credentials.rs
+        |-- mod.rs
+        |-- user.rs
+        |-- entity.rs
+        |-- lifecycle.rs
+        |-- mod.rs
+        |-- entity.rs
+        |-- mod.rs
+        |-- category.rs
+        |-- experience_level.rs
+        |-- industry.rs
+        |-- mod.rs
+        |-- occupation.rs
+        |-- skill.rs
+    |-- src
+    |-- Cargo.toml
+      |-- application_repo.rs
+      |-- candidate_repo.rs
+      |-- company_repo.rs
+      |-- discovery_repo.rs
+      |-- error.rs
+      |-- governance_repo.rs
+      |-- lib.rs
+      |-- opportunity_repo.rs
+      |-- saved_repo.rs
+      |-- security.rs
+      |-- taxonomy_repo.rs
+      |-- token_repo.rs
+      |-- token_service.rs
+      |-- user_repo.rs
+    |-- src
+    |-- Cargo.toml
+      |-- lib.rs
+      |-- location.rs
+    |-- src
+    |-- Cargo.toml
+      |-- admin_repo.rs
+      |-- error.rs
+      |-- lib.rs
+      |-- models.rs
+      |-- reverse.rs
+    |-- src
+    |-- Cargo.toml
+      |-- cluster.rs
+      |-- feature.rs
+      |-- lib.rs
+      |-- marker.rs
+    |-- src
+    |-- Cargo.toml
+      |-- bbox_query.rs
+      |-- clustering.rs
+      |-- error.rs
+      |-- lib.rs
+      |-- models.rs
+      |-- radius_query.rs
+    |-- src
+    |-- build.rs
+    |-- Cargo.toml
+      |-- error.rs
+      |-- lib.rs
+      |-- models.rs
+      |-- repository.rs
+    |-- src
+    |-- Cargo.toml
+      |-- lib.rs
+      |-- mvt.rs
+      |-- tile_coord.rs
+    |-- src
+    |-- Cargo.toml
+      |-- bbox.rs
+      |-- distance.rs
+      |-- error.rs
+      |-- lib.rs
+      |-- point.rs
+
+
+=========================================
+SOURCE CODES CONTENT
+=========================================
+
+--------------------------------------------------
+FILE: biz-application\src\application\dto.rs
+--------------------------------------------------
 
-[workspace.package]
-version = "0.1.0"
-edition = "2021"
-authors = ["Core Platform Team"]
-license = "MIT OR Apache-2.0"
-
-[workspace.dependencies]
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-thiserror = "1.0"
-tokio = { version = "1.38", features = ["full"] }
-sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "macros", "uuid", "chrono", "migrate", "rust_decimal"] }
-uuid = { version = "1.8", features = ["v4", "serde"] }
-chrono = { version = "0.4", features = ["serde"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-axum = { version = "0.7", features = ["macros"] }
-tower = { version = "0.4" }
-tower-http = { version = "0.5", features = ["cors", "trace"] }
-clap = { version = "4.5", features = ["derive"] }
-argon2 = "0.5"
-jsonwebtoken = "9.3"
-rand = "0.8"
-sha2 = "0.10"
-rust_decimal = { version = "1.35", features = ["serde-float"] }
-utoipa = { version = "4.2", features = ["axum_extras", "uuid", "chrono", "decimal", "derive"] }
-utoipa-swagger-ui = { version = "7.1", features = ["axum"] }
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\docker-compose.yml
-======================================================================
-services:
-  postgres:
-    image: postgis/postgis:16-3.4
-    container_name: map_postgis
-    environment:
-      POSTGRES_DB: map_platform
-      POSTGRES_USER: map_user
-      POSTGRES_PASSWORD: map_password
-    ports:
-      - "5433:5432"
-    volumes:
-      - postgis_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U map_user -d map_platform"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-volumes:
-  postgis_data:
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\biz-api\Cargo.toml
-======================================================================
-[package]
-name = "biz-api"
-version.workspace = true
-edition.workspace = true
-authors.workspace = true
-license.workspace = true
-
-[dependencies]
-biz-domain = { path = "../../crates/biz-domain" }
-biz-storage = { path = "../../crates/biz-storage" }
-biz-application = { path = "../../crates/biz-application" }
-geo-types = { path = "../../crates/geo-types" }
-geo-storage = { path = "../../crates/geo-storage" }
-
-axum.workspace = true
-tokio.workspace = true
-tower.workspace = true
-tower-http.workspace = true
-tracing.workspace = true
-tracing-subscriber.workspace = true
-sqlx.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-uuid.workspace = true
-chrono.workspace = true
-thiserror.workspace = true
-rust_decimal.workspace = true
-utoipa.workspace = true
-utoipa-swagger-ui.workspace = true
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\biz-api\src\error.rs
-======================================================================
-use axum::{
-    http::StatusCode,
-    response::{IntoResponse, Response},
-    Json,
-};
-use biz_application::ApplicationError;
-use biz_storage::StorageError;
-use serde::Serialize;
-use uuid::Uuid;
-
-#[derive(Debug, Serialize)]
-pub struct ApiErrorPayload {
-    pub code: String,
-    pub message: String,
-    pub details: serde_json::Value,
-    pub request_id: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ApiErrorResponse {
-    pub error: ApiErrorPayload,
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum ApiError {
-    #[error("Application error: {0}")]
-    Application(#[from] ApplicationError),
-
-    #[error("Storage error: {0}")]
-    Storage(#[from] StorageError),
-
-    #[error("Unauthorized: {0}")]
-    Unauthorized(String),
-
-    #[error("Validation failed: {0}")]
-    Validation(String),
-}
-
-impl IntoResponse for ApiError {
-    fn into_response(self) -> Response {
-        let request_id = Uuid::new_v4().to_string();
-        let (status, code, message) = match self {
-            ApiError::Application(ApplicationError::Validation(msg))
-            | ApiError::Validation(msg) => (StatusCode::BAD_REQUEST, "VALIDATION_ERROR", msg),
-            
-            ApiError::Application(ApplicationError::Unauthorized(msg))
-            | ApiError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, "UNAUTHORIZED", msg),
-            
-            ApiError::Storage(StorageError::InvalidCredentials) => (
-                StatusCode::UNAUTHORIZED,
-                "INVALID_CREDENTIALS",
-                "Email or password is incorrect".to_string(),
-            ),
-            
-            ApiError::Storage(StorageError::EmailAlreadyExists) => (
-                StatusCode::CONFLICT,
-                "EMAIL_ALREADY_EXISTS",
-                "A user with this email already exists".to_string(),
-            ),
-            
-            ApiError::Storage(StorageError::DuplicateApplication) => (
-                StatusCode::CONFLICT,
-                "DUPLICATE_APPLICATION",
-                "You have already applied for this opportunity".to_string(),
-            ),
-            
-            _ => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "INTERNAL_SERVER_ERROR",
-                "An unexpected internal error occurred".to_string(),
-            ),
-        };
-
-        let payload = ApiErrorResponse {
-            error: ApiErrorPayload {
-                code: code.to_string(),
-                message,
-                details: serde_json::json!({}),
-                request_id,
-            },
-        };
-
-        (status, Json(payload)).into_response()
-    }
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\biz-api\src\main.rs
-======================================================================
-mod error;
-mod extractors;
-mod handlers;
-mod openapi;
-mod state;
-
-use axum::{
-    routing::{get, post},
-    Router,
-};
-use geo_storage::{create_connection_pool, run_migrations, DatabaseConfig};
-use openapi::ApiDoc;
-use state::AppState;
-use std::net::SocketAddr;
-use tower_http::cors::{Any, CorsLayer};
-use tower_http::trace::TraceLayer;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use utoipa::OpenApi;
-use utoipa_swagger_ui::SwaggerUi;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "biz_api=info,tower_http=info".into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
-
-    tracing::info!("Initializing Map-First Business Backend API Service...");
-
-    let db_config = DatabaseConfig {
-        database_url: std::env::var("DATABASE_URL").unwrap_or_else(|_| {
-            "postgres://map_user:map_password@localhost:5433/map_platform".to_string()
-        }),
-        max_connections: 20,
-        min_connections: 5,
-        connect_timeout_sec: 10,
-    };
-
-    let pool = create_connection_pool(&db_config).await?;
-    tracing::info!("Connected to PostgreSQL/PostGIS. Running business migrations...");
-    run_migrations(&pool).await?;
-    tracing::info!("Business migrations applied successfully.");
-
-    let jwt_secret = std::env::var("JWT_SECRET")
-        .unwrap_or_else(|_| "super-secret-jwt-key-change-in-production-123456".to_string());
-
-    let app_state = AppState::new(pool, jwt_secret);
-
-    // REST API Routes (/api/v1)
-    let api_router = Router::new()
-        // Auth
-        .route("/auth/register", post(handlers::auth::register_handler))
-        .route("/auth/login", post(handlers::auth::login_handler))
-        .route("/me", get(handlers::auth::me_handler))
-        // Discovery / Search
-        .route("/opportunities/search", get(handlers::discovery::search_opportunities_handler))
-        // Opportunities Lifecycle
-        .route("/companies/:company_id/opportunities", post(handlers::opportunity::create_opportunity_handler))
-        .route("/opportunities/:id/publish", post(handlers::opportunity::publish_opportunity_handler))
-        .route("/opportunities/:id/pause", post(handlers::opportunity::pause_opportunity_handler))
-        .route("/opportunities/:id/close", post(handlers::opportunity::close_opportunity_handler))
-        // Applications
-        .route("/opportunities/:id/applications", post(handlers::application::submit_application_handler))
-        .route("/applications/:id/status", post(handlers::application::change_application_status_handler))
-        // Saved Items
-        .route("/opportunities/:id/save", post(handlers::saved::save_opportunity_handler).delete(handlers::saved::remove_saved_opportunity_handler))
-        .route("/me/saved-opportunities", get(handlers::saved::list_saved_opportunities_handler))
-        // Governance / Reports
-        .route("/opportunities/:id/reports", post(handlers::governance::report_opportunity_handler));
-
-    let app = Router::new()
-        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
-        .nest("/api/v1", api_router)
-        .layer(
-            CorsLayer::new()
-                .allow_origin(Any)
-                .allow_methods(Any)
-                .allow_headers(Any),
-        )
-        .layer(TraceLayer::new_for_http())
-        .with_state(app_state);
-
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8081));
-    tracing::info!("Business API Server listening on http://{}", addr);
-    tracing::info!("Swagger UI available at http://{}/swagger-ui", addr);
-
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
-
-    Ok(())
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\biz-api\src\openapi.rs
-======================================================================
-use utoipa::OpenApi;
-
-#[derive(OpenApi)]
-#[openapi(
-    paths(),
-    tags(
-        (name = "Auth", description = "Authentication & Identity management"),
-        (name = "Opportunities", description = "Opportunity lifecycle management"),
-        (name = "Discovery", description = "Search & Discovery orchestration"),
-        (name = "Applications", description = "Candidate job applications")
-    )
-)]
-pub struct ApiDoc;
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\biz-api\src\state.rs
-======================================================================
-use biz_application::application::ApplicationUseCases;
-use biz_application::candidate::CandidateUseCases;
-use biz_application::discovery::DiscoveryUseCases;
-use biz_application::governance::GovernanceUseCases;
-use biz_application::opportunity::OpportunityUseCases;
-use biz_application::saved::SavedUseCases;
-use biz_storage::{
-    ApplicationRepository, CandidateRepository, CompanyRepository, DiscoveryRepository,
-    GovernanceRepository, OpportunityRepository, SavedRepository, TokenRepository, TokenService,
-    UserRepository,
-};
-use sqlx::PgPool;
-
-#[derive(Clone)]
-pub struct AppState {
-    pub pool: PgPool,
-    pub token_service: TokenService,
-    pub auth_use_cases: biz_application::identity::AuthUseCases,
-    pub opp_use_cases: OpportunityUseCases,
-    pub discovery_use_cases: DiscoveryUseCases,
-    pub candidate_use_cases: CandidateUseCases,
-    pub app_use_cases: ApplicationUseCases,
-    pub saved_use_cases: SavedUseCases,
-    pub gov_use_cases: GovernanceUseCases,
-}
-
-impl AppState {
-    pub fn new(pool: PgPool, jwt_secret: String) -> Self {
-        let user_repo = UserRepository::new(pool.clone());
-        let token_repo = TokenRepository::new(pool.clone());
-        let company_repo = CompanyRepository::new(pool.clone());
-        let opp_repo = OpportunityRepository::new(pool.clone());
-        let candidate_repo = CandidateRepository::new(pool.clone());
-        let app_repo = ApplicationRepository::new(pool.clone());
-        let saved_repo = SavedRepository::new(pool.clone());
-        let discovery_repo = DiscoveryRepository::new(pool.clone());
-        let gov_repo = GovernanceRepository::new(pool.clone());
-
-        let token_service = TokenService::new(jwt_secret);
-
-        let auth_use_cases = biz_application::identity::AuthUseCases::new(
-            user_repo.clone(),
-            token_repo.clone(),
-            token_service.clone(),
-        );
-        let opp_use_cases = OpportunityUseCases::new(opp_repo.clone(), company_repo.clone());
-        let discovery_use_cases = DiscoveryUseCases::new(discovery_repo);
-        let candidate_use_cases = CandidateUseCases::new(candidate_repo.clone());
-        let app_use_cases = ApplicationUseCases::new(
-            app_repo,
-            opp_repo.clone(),
-            candidate_repo.clone(),
-            company_repo.clone(),
-        );
-        let saved_use_cases = SavedUseCases::new(saved_repo, candidate_repo.clone());
-        let gov_use_cases = GovernanceUseCases::new(gov_repo, company_repo);
-
-        Self {
-            pool,
-            token_service,
-            auth_use_cases,
-            opp_use_cases,
-            discovery_use_cases,
-            candidate_use_cases,
-            app_use_cases,
-            saved_use_cases,
-            gov_use_cases,
-        }
-    }
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\biz-api\src\extractors\auth.rs
-======================================================================
-use crate::error::ApiError;
-use crate::state::AppState;
-use axum::{
-    async_trait,
-    extract::{FromRef, FromRequestParts},
-    http::{header, request::Parts},
-};
-use uuid::Uuid;
-
-pub struct AuthenticatedUser {
-    pub user_id: Uuid,
-}
-
-#[async_trait]
-impl<S> FromRequestParts<S> for AuthenticatedUser
-where
-    AppState: FromRef<S>,
-    S: Send + Sync,
-{
-    type Rejection = ApiError;
-
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let app_state = AppState::from_ref(state);
-
-        let auth_header = parts
-            .headers
-            .get(header::AUTHORIZATION)
-            .and_then(|value| value.to_str().ok())
-            .ok_or_else(|| ApiError::Unauthorized("Missing Authorization header".into()))?;
-
-        if !auth_header.starts_with("Bearer ") {
-            return Err(ApiError::Unauthorized("Invalid authorization format. Use Bearer token".into()));
-        }
-
-        let token = &auth_header[7..];
-        let claims = app_state
-            .token_service
-            .verify_access_token(token)
-            .map_err(|_| ApiError::Unauthorized("Invalid or expired access token".into()))?;
-
-        Ok(AuthenticatedUser { user_id: claims.sub })
-    }
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\biz-api\src\extractors\mod.rs
-======================================================================
-pub mod auth;
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\biz-api\src\handlers\application.rs
-======================================================================
-use crate::error::ApiError;
-use crate::extractors::auth::AuthenticatedUser;
-use crate::state::AppState;
-use axum::{
-    extract::{Path, State},
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-};
-use biz_application::application::{ChangeApplicationStatusCommand, SubmitApplicationCommand};
-use uuid::Uuid;
-
-pub async fn submit_application_handler(
-    State(state): State<AppState>,
-    auth: AuthenticatedUser,
-    Path(opportunity_id): Path<Uuid>,
-    Json(mut cmd): Json<SubmitApplicationCommand>,
-) -> Result<impl IntoResponse, ApiError> {
-    cmd.opportunity_id = opportunity_id;
-    let app = state.app_use_cases.submit_application(auth.user_id, cmd).await?;
-    Ok((StatusCode::CREATED, Json(app)))
-}
-
-pub async fn change_application_status_handler(
-    State(state): State<AppState>,
-    auth: AuthenticatedUser,
-    Path(application_id): Path<Uuid>,
-    Json(cmd): Json<ChangeApplicationStatusCommand>,
-) -> Result<impl IntoResponse, ApiError> {
-    state.app_use_cases.change_status(auth.user_id, application_id, cmd).await?;
-    Ok(StatusCode::OK)
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\biz-api\src\handlers\auth.rs
-======================================================================
-use crate::error::ApiError;
-use crate::extractors::auth::AuthenticatedUser;
-use crate::state::AppState;
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-};
-use biz_application::identity::{LoginCommand, RegisterCommand};
-use utoipa::OpenApi;
-
-pub async fn register_handler(
-    State(state): State<AppState>,
-    Json(cmd): Json<RegisterCommand>,
-) -> Result<impl IntoResponse, ApiError> {
-    let res = state.auth_use_cases.register(cmd).await?;
-    Ok((StatusCode::CREATED, Json(res)))
-}
-
-pub async fn login_handler(
-    State(state): State<AppState>,
-    Json(cmd): Json<LoginCommand>,
-) -> Result<impl IntoResponse, ApiError> {
-    let res = state.auth_use_cases.login(cmd).await?;
-    Ok((StatusCode::OK, Json(res)))
-}
-
-pub async fn me_handler(
-    State(state): State<AppState>,
-    auth: AuthenticatedUser,
-) -> Result<impl IntoResponse, ApiError> {
-    Ok((StatusCode::OK, Json(serde_json::json!({ "user_id": auth.user_id }))))
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\biz-api\src\handlers\discovery.rs
-======================================================================
-use crate::error::ApiError;
-use crate::state::AppState;
-use axum::{
-    extract::{Query, State},
-    response::IntoResponse,
-    Json,
-};
-use biz_application::discovery::SearchOpportunitiesRequest;
-
-pub async fn search_opportunities_handler(
-    State(state): State<AppState>,
-    Query(req): Query<SearchOpportunitiesRequest>,
-) -> Result<impl IntoResponse, ApiError> {
-    let result = state.discovery_use_cases.search(req).await?;
-    Ok(Json(result))
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\biz-api\src\handlers\governance.rs
-======================================================================
-use crate::error::ApiError;
-use crate::extractors::auth::AuthenticatedUser;
-use crate::state::AppState;
-use axum::{
-    extract::{Path, State},
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-};
-use biz_application::governance::CreateReportCommand;
-use uuid::Uuid;
-
-pub async fn report_opportunity_handler(
-    State(state): State<AppState>,
-    auth: AuthenticatedUser,
-    Path(opportunity_id): Path<Uuid>,
-    Json(mut cmd): Json<CreateReportCommand>,
-) -> Result<impl IntoResponse, ApiError> {
-    cmd.opportunity_id = opportunity_id;
-    let report_id = state.gov_use_cases.report_opportunity(Some(auth.user_id), cmd).await?;
-    Ok((StatusCode::CREATED, Json(serde_json::json!({ "report_id": report_id }))))
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\biz-api\src\handlers\mod.rs
-======================================================================
-pub mod application;
-pub mod auth;
-pub mod discovery;
-pub mod governance;
-pub mod opportunity;
-pub mod saved;
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\biz-api\src\handlers\opportunity.rs
-======================================================================
-use crate::error::ApiError;
-use crate::extractors::auth::AuthenticatedUser;
-use crate::state::AppState;
-use axum::{
-    extract::{Path, State},
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-};
-use biz_application::opportunity::CreateOpportunityCommand;
-use uuid::Uuid;
-
-pub async fn create_opportunity_handler(
-    State(state): State<AppState>,
-    auth: AuthenticatedUser,
-    Path(company_id): Path<Uuid>,
-    Json(mut cmd): Json<CreateOpportunityCommand>,
-) -> Result<impl IntoResponse, ApiError> {
-    cmd.company_id = company_id;
-    let opp = state.opp_use_cases.create_opportunity(auth.user_id, cmd).await?;
-    Ok((StatusCode::CREATED, Json(opp)))
-}
-
-pub async fn publish_opportunity_handler(
-    State(state): State<AppState>,
-    auth: AuthenticatedUser,
-    Path(id): Path<Uuid>,
-) -> Result<impl IntoResponse, ApiError> {
-    state.opp_use_cases.publish(auth.user_id, id).await?;
-    Ok(StatusCode::OK)
-}
-
-pub async fn pause_opportunity_handler(
-    State(state): State<AppState>,
-    auth: AuthenticatedUser,
-    Path(id): Path<Uuid>,
-) -> Result<impl IntoResponse, ApiError> {
-    state.opp_use_cases.pause(auth.user_id, id).await?;
-    Ok(StatusCode::OK)
-}
-
-pub async fn close_opportunity_handler(
-    State(state): State<AppState>,
-    auth: AuthenticatedUser,
-    Path(id): Path<Uuid>,
-) -> Result<impl IntoResponse, ApiError> {
-    state.opp_use_cases.close(auth.user_id, id).await?;
-    Ok(StatusCode::OK)
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\biz-api\src\handlers\saved.rs
-======================================================================
-use crate::error::ApiError;
-use crate::extractors::auth::AuthenticatedUser;
-use crate::state::AppState;
-use axum::{
-    extract::{Path, State},
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-};
-use uuid::Uuid;
-
-pub async fn save_opportunity_handler(
-    State(state): State<AppState>,
-    auth: AuthenticatedUser,
-    Path(id): Path<Uuid>,
-) -> Result<impl IntoResponse, ApiError> {
-    state.saved_use_cases.save_opportunity(auth.user_id, id).await?;
-    Ok(StatusCode::CREATED)
-}
-
-pub async fn remove_saved_opportunity_handler(
-    State(state): State<AppState>,
-    auth: AuthenticatedUser,
-    Path(id): Path<Uuid>,
-) -> Result<impl IntoResponse, ApiError> {
-    state.saved_use_cases.remove_saved_opportunity(auth.user_id, id).await?;
-    Ok(StatusCode::OK)
-}
-
-pub async fn list_saved_opportunities_handler(
-    State(state): State<AppState>,
-    auth: AuthenticatedUser,
-) -> Result<impl IntoResponse, ApiError> {
-    let items = state.saved_use_cases.list_saved_opportunities(auth.user_id).await?;
-    Ok(Json(items))
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\geo-importer\Cargo.toml
-======================================================================
-[package]
-name = "geo-importer"
-version.workspace = true
-edition.workspace = true
-authors.workspace = true
-license.workspace = true
-
-[dependencies]
-geo-types = { path = "../../crates/geo-types" }
-geo-domain = { path = "../../crates/geo-domain" }
-geo-storage = { path = "../../crates/geo-storage" }
-clap.workspace = true
-osmpbf = "0.3"
-tokio.workspace = true
-sqlx.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-thiserror.workspace = true
-tracing.workspace = true
-tracing-subscriber.workspace = true
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\geo-importer\src\cli.rs
-======================================================================
-use clap::Parser;
-use std::path::PathBuf;
-
-#[derive(Parser, Debug)]
-#[command(name = "geo-importer")]
-#[command(about = "High-performance streaming geospatial data importer for OpenStreetMap & Custom Data")]
-pub struct CliArgs {
-    /// Path to the .osm.pbf file (e.g. data/iran-latest.osm.pbf)
-    #[arg(short, long)]
-    pub file: Option<PathBuf>,
-
-    /// Batch size for bulk database inserts
-    #[arg(short, long, default_value_t = 500)]
-    pub batch_size: usize,
-
-    /// Seed sample opportunity locations for testing
-    #[arg(long, default_value_t = false)]
-    pub seed_samples: bool,
-
-    /// PostgreSQL Database URL
-    #[arg(long)]
-    pub database_url: Option<String>,
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\geo-importer\src\error.rs
-======================================================================
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-pub enum ImporterError {
-    #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
-
-    #[error("OSM PBF parsing error: {0}")]
-    Osm(#[from] osmpbf::Error),
-
-    #[error("Database error: {0}")]
-    Database(#[from] sqlx::Error),
-
-    #[error("Validation error: {0}")]
-    Validation(String),
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\geo-importer\src\main.rs
-======================================================================
-mod cli;
-mod error;
-mod osm_parser;
-mod pipeline;
-
-use clap::Parser;
-use cli::CliArgs;
-use error::ImporterError;
-use geo_storage::{create_connection_pool, run_migrations, DatabaseConfig};
-use osm_parser::{ExtractedOsmPoint, ExtractedOsmRoad};
-use pipeline::{insert_osm_batch, insert_roads_batch};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
-        .with(tracing_subscriber::fmt::layer())
-        .init();
-
-    let args = CliArgs::parse();
-
-    let db_url = args
-        .database_url
-        .or_else(|| std::env::var("DATABASE_URL").ok())
-        .unwrap_or_else(|| {
-            "postgres://map_user:map_password@localhost:5433/map_platform".to_string()
-        });
-
-    let db_config = DatabaseConfig {
-        database_url: db_url,
-        max_connections: 10,
-        min_connections: 2,
-        connect_timeout_sec: 10,
-    };
-
-    tracing::info!("Connecting to PostGIS database...");
-    let pool = create_connection_pool(&db_config).await?;
-    run_migrations(&pool).await?;
-
-    if let Some(pbf_path) = args.file {
-        tracing::info!("Processing real OSM data from PBF: {:?}", pbf_path);
-
-        let (points_tx, mut points_rx) = tokio::sync::mpsc::channel::<Vec<ExtractedOsmPoint>>(16);
-        let (roads_tx, mut roads_rx) = tokio::sync::mpsc::channel::<Vec<ExtractedOsmRoad>>(16);
-        let batch_size = args.batch_size;
-
-        // Producer Thread: Streaming parse of actual nodes and ways
-        let producer_handle = tokio::task::spawn_blocking(move || {
-            osm_parser::stream_osm_pbf_full(
-                &pbf_path,
-                |batch| {
-                    if points_tx.blocking_send(batch).is_err() {
-                        return Err(ImporterError::Validation("Points channel closed".into()));
-                    }
-                    Ok(())
-                },
-                |batch| {
-                    if roads_tx.blocking_send(batch).is_err() {
-                        return Err(ImporterError::Validation("Roads channel closed".into()));
-                    }
-                    Ok(())
-                },
-                batch_size,
-            )
-        });
-
-        // Consumers: Concurrently write real points and real road centerlines
-        let pool_for_points = pool.clone();
-        let points_consumer = tokio::spawn(async move {
-            let mut count = 0;
-            while let Some(batch) = points_rx.recv().await {
-                let len = batch.len();
-                let _ = insert_osm_batch(&pool_for_points, &batch).await;
-                count += len;
-                if count % 20000 == 0 {
-                    tracing::info!("Imported {} real place/amenity locations...", count);
-                }
-            }
-            count
-        });
-
-        let pool_for_roads = pool.clone();
-        let roads_consumer = tokio::spawn(async move {
-            let mut count = 0;
-            while let Some(batch) = roads_rx.recv().await {
-                let len = batch.len();
-                let _ = insert_roads_batch(&pool_for_roads, &batch).await;
-                count += len;
-                if count % 10000 == 0 {
-                    tracing::info!("Imported {} real road linestrings...", count);
-                }
-            }
-            count
-        });
-
-        let _ = producer_handle.await??;
-        let total_points = points_consumer.await?;
-        let total_roads = roads_consumer.await?;
-
-        tracing::info!(
-            "REAL DATA IMPORT COMPLETED! Successfully ingested {} real locations and {} real road centerlines directly into PostGIS.",
-            total_points,
-            total_roads
-        );
-    }
-
-    Ok(())
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\geo-importer\src\osm_parser.rs
-======================================================================
-use crate::error::ImporterError;
-use geo_types::GeoPoint;
-use osmpbf::{Element, ElementReader};
-use std::collections::HashMap;
-use std::path::Path;
-
-#[derive(Debug, Clone)]
-pub struct ExtractedOsmPoint {
-    pub osm_id: i64,
-    pub point: GeoPoint,
-    pub name: Option<String>,
-    pub category: String,
-    pub tags: HashMap<String, String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct ExtractedOsmRoad {
-    pub osm_id: i64,
-    pub name: Option<String>,
-    pub highway: String,
-    pub line_wkt: String,
-}
-
-/// Streams real points and road linestrings from OSM PBF file.
-pub fn stream_osm_pbf_full<FPoints, FRoads>(
-    pbf_path: &Path,
-    mut on_points_batch: FPoints,
-    mut on_roads_batch: FRoads,
-    batch_size: usize,
-) -> Result<(usize, usize), ImporterError>
-where
-    FPoints: FnMut(Vec<ExtractedOsmPoint>) -> Result<(), ImporterError>,
-    FRoads: FnMut(Vec<ExtractedOsmRoad>) -> Result<(), ImporterError>,
-{
-    let reader = ElementReader::from_path(pbf_path)?;
-    let mut node_coords: HashMap<i64, (f32, f32)> = HashMap::new();
-    let mut points_batch = Vec::with_capacity(batch_size);
-    let mut roads_batch = Vec::with_capacity(batch_size);
-
-    let mut total_points = 0;
-    let mut total_roads = 0;
-
-    tracing::info!("Parsing OSM elements (Points and Highways)...");
-
-    reader.for_each(|element| {
-        match element {
-            Element::DenseNode(node) => {
-                let lon = node.lon();
-                let lat = node.lat();
-                node_coords.insert(node.id, (lon as f32, lat as f32));
-
-                let mut tags_map = HashMap::new();
-                let mut name = None;
-                let mut category = None;
-
-                for (key, val) in node.tags() {
-                    tags_map.insert(key.to_string(), val.to_string());
-                    if key == "name:fa" {
-                        name = Some(val.to_string());
-                    } else if key == "name" && name.is_none() {
-                        name = Some(val.to_string());
-                    } else if key == "office" || key == "amenity" || key == "shop" || key == "place" {
-                        category = Some(format!("{}:{}", key, val));
-                    }
-                }
-
-                if let (Some(cat), Ok(pt)) = (category, GeoPoint::new(lon, lat)) {
-                    points_batch.push(ExtractedOsmPoint {
-                        osm_id: node.id,
-                        point: pt,
-                        name,
-                        category: cat,
-                        tags: tags_map,
-                    });
-
-                    if points_batch.len() >= batch_size {
-                        total_points += points_batch.len();
-                        let batch = std::mem::replace(&mut points_batch, Vec::with_capacity(batch_size));
-                        let _ = on_points_batch(batch);
-                    }
-                }
-            }
-            Element::Way(way) => {
-                let mut highway = None;
-                let mut name = None;
-
-                for (k, v) in way.tags() {
-                    if k == "highway" {
-                        highway = Some(v.to_string());
-                    } else if k == "name:fa" {
-                        name = Some(v.to_string());
-                    } else if k == "name" && name.is_none() {
-                        name = Some(v.to_string());
-                    }
-                }
-
-                if let Some(hw) = highway {
-                    let mut coords_str = Vec::new();
-                    for node_id in way.refs() {
-                        if let Some(&(lon, lat)) = node_coords.get(&node_id) {
-                            coords_str.push(format!("{:.6} {:.6}", lon, lat));
-                        }
-                    }
-
-                    if coords_str.len() >= 2 {
-                        let wkt = format!("LINESTRING({})", coords_str.join(", "));
-                        roads_batch.push(ExtractedOsmRoad {
-                            osm_id: way.id(),
-                            name,
-                            highway: hw,
-                            line_wkt: wkt,
-                        });
-
-                        if roads_batch.len() >= batch_size {
-                            total_roads += roads_batch.len();
-                            let batch = std::mem::replace(&mut roads_batch, Vec::with_capacity(batch_size));
-                            let _ = on_roads_batch(batch);
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-    })?;
-
-    if !points_batch.is_empty() {
-        total_points += points_batch.len();
-        on_points_batch(points_batch)?;
-    }
-
-    if !roads_batch.is_empty() {
-        total_roads += roads_batch.len();
-        on_roads_batch(roads_batch)?;
-    }
-
-    Ok((total_points, total_roads))
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\geo-importer\src\pipeline.rs
-======================================================================
-use crate::error::ImporterError;
-use crate::osm_parser::{ExtractedOsmPoint, ExtractedOsmRoad};
-use sqlx::PgPool;
-
-/// High-performance bulk insert for real OSM road centerlines
-pub async fn insert_roads_batch(
-    pool: &PgPool,
-    roads: &[ExtractedOsmRoad],
-) -> Result<u64, ImporterError> {
-    if roads.is_empty() {
-        return Ok(0);
-    }
-
-    let mut ids = Vec::with_capacity(roads.len());
-    let mut names = Vec::with_capacity(roads.len());
-    let mut highways = Vec::with_capacity(roads.len());
-    let mut wkts = Vec::with_capacity(roads.len());
-
-    for r in roads {
-        ids.push(r.osm_id);
-        names.push(r.name.clone());
-        highways.push(r.highway.clone());
-        wkts.push(r.line_wkt.clone());
-    }
-
-    let sql = r#"
-        INSERT INTO osm_roads (id, name, highway, geom)
-        SELECT 
-            u.id,
-            u.name,
-            u.highway,
-            ST_SetSRID(ST_GeomFromText(u.wkt), 4326)
-        FROM UNNEST(
-            $1::bigint[],
-            $2::text[],
-            $3::text[],
-            $4::text[]
-        ) AS u(id, name, highway, wkt)
-        ON CONFLICT (id) DO NOTHING
-    "#;
-
-    sqlx::query(sql)
-        .bind(&ids)
-        .bind(&names)
-        .bind(&highways)
-        .bind(&wkts)
-        .execute(pool)
-        .await?;
-
-    Ok(roads.len() as u64)
-}
-
-/// Bulk insert for points/amenities/places
-pub async fn insert_osm_batch(
-    pool: &PgPool,
-    points: &[ExtractedOsmPoint],
-) -> Result<u64, ImporterError> {
-    if points.is_empty() {
-        return Ok(0);
-    }
-
-    let mut lons = Vec::with_capacity(points.len());
-    let mut lats = Vec::with_capacity(points.len());
-    let mut names = Vec::with_capacity(points.len());
-    let mut source_ids = Vec::with_capacity(points.len());
-    let mut metadatas = Vec::with_capacity(points.len());
-
-    for p in points {
-        lons.push(p.point.longitude());
-        lats.push(p.point.latitude());
-        names.push(p.name.clone());
-        source_ids.push(p.osm_id.to_string());
-        metadatas.push(serde_json::to_value(&p.tags).unwrap_or_else(|_| serde_json::json!({})));
-    }
-
-    let sql = r#"
-        INSERT INTO locations (
-            coordinates,
-            address_summary,
-            precision,
-            source,
-            source_id,
-            metadata
-        )
-        SELECT 
-            ST_SetSRID(ST_MakePoint(u.lon, u.lat), 4326),
-            u.name,
-            'rooftop',
-            'osm',
-            u.source_id,
-            u.meta
-        FROM UNNEST(
-            $1::float8[],
-            $2::float8[],
-            $3::text[],
-            $4::text[],
-            $5::jsonb[]
-        ) AS u(lon, lat, name, source_id, meta)
-        ON CONFLICT (source, source_id) 
-        DO UPDATE SET
-            address_summary = EXCLUDED.address_summary,
-            metadata = EXCLUDED.metadata,
-            updated_at = NOW()
-    "#;
-
-    sqlx::query(sql)
-        .bind(&lons)
-        .bind(&lats)
-        .bind(&names)
-        .bind(&source_ids)
-        .bind(&metadatas)
-        .execute(pool)
-        .await?;
-
-    Ok(points.len() as u64)
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\map-api\Cargo.toml
-======================================================================
-[package]
-name = "map-api"
-version.workspace = true
-edition.workspace = true
-authors.workspace = true
-license.workspace = true
-
-[dependencies]
-geo-types = { path = "../../crates/geo-types" }
-geo-domain = { path = "../../crates/geo-domain" }
-geo-storage = { path = "../../crates/geo-storage" }
-geo-query = { path = "../../crates/geo-query" }
-geo-presentation = { path = "../../crates/geo-presentation" }
-geo-tiles = { path = "../../crates/geo-tiles" }
-geo-geocoding = { path = "../../crates/geo-geocoding" }
-
-axum.workspace = true
-tokio.workspace = true
-tower.workspace = true
-tower-http.workspace = true
-tracing.workspace = true
-tracing-subscriber.workspace = true
-sqlx.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-uuid.workspace = true
-chrono.workspace = true
-thiserror.workspace = true
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\map-api\src\error.rs
-======================================================================
-use axum::{
-    http::StatusCode,
-    response::{IntoResponse, Response},
-    Json,
-};
-use geo_query::QueryError;
-use geo_storage::StorageError;
-use geo_tiles::TileError;
-use geo_types::GeoError;
-use serde::Serialize;
-
-#[derive(Debug, Serialize)]
-pub struct ApiErrorPayload {
-    pub code: String,
-    pub message: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ApiErrorResponse {
-    pub error: ApiErrorPayload,
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum ApiError {
-    #[error("Geospatial validation failed: {0}")]
-    Validation(String),
-
-    #[error("Not found: {0}")]
-    NotFound(String),
-
-    #[error("Storage error: {0}")]
-    Storage(#[from] StorageError),
-
-    #[error("Spatial query failed: {0}")]
-    Query(#[from] QueryError),
-
-    #[error("Tile error: {0}")]
-    Tile(#[from] TileError),
-
-    #[error("Internal database error")]
-    Database(#[from] sqlx::Error),
-}
-
-impl IntoResponse for ApiError {
-    fn into_response(self) -> Response {
-        let (status, code, message) = match self {
-            ApiError::Validation(msg) => (StatusCode::BAD_REQUEST, "INVALID_INPUT", msg),
-            ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, "NOT_FOUND", msg),
-            ApiError::Storage(StorageError::NotFound(id)) => (
-                StatusCode::NOT_FOUND,
-                "NOT_FOUND",
-                format!("Resource with id {id} was not found"),
-            ),
-            ApiError::Storage(StorageError::Domain(geo_err)) => (
-                StatusCode::BAD_REQUEST,
-                "INVALID_COORDINATES",
-                geo_err.to_string(),
-            ),
-            ApiError::Query(QueryError::LimitExceeded { requested, max }) => (
-                StatusCode::BAD_REQUEST,
-                "LIMIT_EXCEEDED",
-                format!("Requested limit {requested} exceeds maximum allowable limit of {max}"),
-            ),
-            ApiError::Query(QueryError::Domain(GeoError::InvalidBoundingBoxLatitude { .. }))
-            | ApiError::Query(QueryError::Domain(GeoError::InvalidBoundingBoxLongitude { .. })) => (
-                StatusCode::BAD_REQUEST,
-                "INVALID_BBOX",
-                "Bounding box coordinates are invalid or inverted".to_string(),
-            ),
-            ApiError::Tile(TileError::InvalidZoom(z)) => (
-                StatusCode::BAD_REQUEST,
-                "INVALID_ZOOM",
-                format!("Zoom level {z} is outside valid range (0-22)"),
-            ),
-            ApiError::Tile(TileError::TileXOutOfBounds { .. })
-            | ApiError::Tile(TileError::TileYOutOfBounds { .. }) => (
-                StatusCode::BAD_REQUEST,
-                "TILE_OUT_OF_BOUNDS",
-                "Requested tile coordinate is out of bounds for the given zoom level".to_string(),
-            ),
-            _ => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "INTERNAL_SERVER_ERROR",
-                "An unexpected internal error occurred".to_string(),
-            ),
-        };
-
-        let payload = ApiErrorResponse {
-            error: ApiErrorPayload {
-                code: code.to_string(),
-                message,
-            },
-        };
-
-        (status, Json(payload)).into_response()
-    }
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\map-api\src\main.rs
-======================================================================
-mod dto;
-mod error;
-mod handlers;
-mod state;
-
-use axum::{
-    routing::{get, post},
-    Router,
-};
-use geo_storage::{create_connection_pool, run_migrations, DatabaseConfig};
-use state::AppState;
-use std::net::SocketAddr;
-use tower_http::cors::{Any, CorsLayer};
-use tower_http::trace::TraceLayer;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "map_api=info,tower_http=info".into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
-
-    tracing::info!("Initializing Geospatial Map API Service...");
-
-    let db_config = DatabaseConfig {
-        database_url: std::env::var("DATABASE_URL").unwrap_or_else(|_| {
-            "postgres://map_user:map_password@localhost:5433/map_platform".to_string()
-        }),
-        max_connections: 20,
-        min_connections: 5,
-        connect_timeout_sec: 10,
-    };
-
-    let pool = create_connection_pool(&db_config).await?;
-    tracing::info!("Connected to PostgreSQL/PostGIS. Running migrations...");
-    run_migrations(&pool).await?;
-    tracing::info!("Migrations applied successfully.");
-
-    let app_state = AppState::new(pool);
-
-    let app = Router::new()
-        .route("/healthz", get(handlers::health::health_check))
-        .route("/api/v1/map/features", get(handlers::map::search_viewport))
-        .route("/api/v1/map/nearby", get(handlers::map::search_nearby))
-        .route("/api/v1/locations", post(handlers::locations::create_location))
-        .route("/api/v1/tiles/:z/:x/:tile", get(handlers::tiles::serve_vector_tile))
-        .route("/api/v1/base-tiles/:z/:x/:tile", get(handlers::tiles::serve_base_map_tile))
-        .route("/api/v1/reverse-geocoding", get(handlers::geocoding::reverse_geocode_handler))
-        .route("/api/v1/admin/areas", get(handlers::geocoding::list_admin_areas_handler))
-        .layer(
-            CorsLayer::new()
-                .allow_origin(Any)
-                .allow_methods(Any)
-                .allow_headers(Any),
-        )
-        .layer(TraceLayer::new_for_http())
-        .with_state(app_state);
-
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
-    tracing::info!("Map Platform HTTP server listening on http://{}", addr);
-
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
-
-    Ok(())
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\map-api\src\state.rs
-======================================================================
-use geo_storage::LocationRepository;
-use sqlx::PgPool;
-
-#[derive(Clone)]
-pub struct AppState {
-    pub pool: PgPool,
-    pub location_repo: LocationRepository,
-}
-
-impl AppState {
-    pub fn new(pool: PgPool) -> Self {
-        let location_repo = LocationRepository::new(pool.clone());
-        Self { pool, location_repo }
-    }
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\map-api\src\dto\mod.rs
-======================================================================
-pub mod requests;
-
-pub use requests::{BBoxQueryParams, CreateLocationRequest, NearbyQueryParams};
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\map-api\src\dto\requests.rs
-======================================================================
-use crate::error::ApiError;
-use geo_domain::LocationPrecision;
-use geo_types::{BoundingBox, GeoPoint, Radius};
-use serde::Deserialize;
-
-#[derive(Debug, Deserialize)]
-pub struct BBoxQueryParams {
-    pub bbox: String,
-    pub zoom: Option<u8>,
-    pub limit: Option<usize>,
-    pub source: Option<String>,
-}
-
-impl BBoxQueryParams {
-    pub fn parse_bbox(&self) -> Result<BoundingBox, ApiError> {
-        let parts: Vec<&str> = self.bbox.split(',').map(|s| s.trim()).collect();
-        if parts.len() != 4 {
-            return Err(ApiError::Validation(
-                "Bounding box must be formatted as 'west,south,east,north'".to_string(),
-            ));
-        }
-
-        let west: f64 = parts[0].parse().map_err(|_| ApiError::Validation("Invalid west coordinate".into()))?;
-        let south: f64 = parts[1].parse().map_err(|_| ApiError::Validation("Invalid south coordinate".into()))?;
-        let east: f64 = parts[2].parse().map_err(|_| ApiError::Validation("Invalid east coordinate".into()))?;
-        let north: f64 = parts[3].parse().map_err(|_| ApiError::Validation("Invalid north coordinate".into()))?;
-
-        BoundingBox::new(west, south, east, north)
-            .map_err(|e| ApiError::Validation(e.to_string()))
-    }
-}
-
-#[derive(Debug, Deserialize)]
-pub struct NearbyQueryParams {
-    pub lat: f64,
-    pub lon: f64,
-    pub radius: f64,
-    pub limit: Option<usize>,
-}
-
-impl NearbyQueryParams {
-    pub fn parse_point_and_radius(&self) -> Result<(GeoPoint, Radius), ApiError> {
-        let pt = GeoPoint::new(self.lon, self.lat)
-            .map_err(|e| ApiError::Validation(e.to_string()))?;
-        let rad = Radius::from_meters(self.radius)
-            .map_err(|e| ApiError::Validation(e.to_string()))?;
-        Ok((pt, rad))
-    }
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CreateLocationRequest {
-    pub longitude: f64,
-    pub latitude: f64,
-    pub address_summary: Option<String>,
-    pub precision: Option<LocationPrecision>,
-    pub source: Option<String>,
-    pub source_id: Option<String>,
-    pub metadata: Option<serde_json::Value>,
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\map-api\src\handlers\geocoding.rs
-======================================================================
-use crate::error::ApiError;
-use crate::state::AppState;
-use axum::{
-    extract::{Query, State},
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-};
-use geo_geocoding::{find_areas_by_parent, reverse_geocode_point};
-use geo_types::GeoPoint;
-use serde::Deserialize;
-use uuid::Uuid;
-
-#[derive(Debug, Deserialize)]
-pub struct ReverseGeocodeQuery {
-    pub lat: f64,
-    pub lon: f64,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct AdminAreasQuery {
-    pub parent_id: Option<Uuid>,
-}
-
-pub async fn reverse_geocode_handler(
-    State(state): State<AppState>,
-    Query(params): Query<ReverseGeocodeQuery>,
-) -> Result<impl IntoResponse, ApiError> {
-    let point = GeoPoint::new(params.lon, params.lat)
-        .map_err(|e| ApiError::Validation(e.to_string()))?;
-
-    match reverse_geocode_point(&state.pool, &point).await {
-        Ok(Some(result)) => Ok(Json(result)),
-        Ok(None) => Err(ApiError::NotFound(
-            "No administrative area found containing these coordinates".to_string(),
-        )),
-        Err(e) => Err(ApiError::Validation(e.to_string())),
-    }
-}
-
-pub async fn list_admin_areas_handler(
-    State(state): State<AppState>,
-    Query(params): Query<AdminAreasQuery>,
-) -> Result<impl IntoResponse, ApiError> {
-    let areas = find_areas_by_parent(&state.pool, params.parent_id)
-        .await
-        .map_err(|e| ApiError::Validation(e.to_string()))?;
-
-    Ok(Json(areas))
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\map-api\src\handlers\health.rs
-======================================================================
-use crate::state::AppState;
-use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
-use serde_json::json;
-
-pub async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
-    match sqlx::query("SELECT 1").execute(&state.pool).await {
-        Ok(_) => (
-            StatusCode::OK,
-            Json(json!({ "status": "healthy", "database": "connected" })),
-        ),
-        Err(err) => (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({ "status": "unhealthy", "database_error": err.to_string() })),
-        ),
-    }
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\map-api\src\handlers\locations.rs
-======================================================================
-use crate::dto::CreateLocationRequest;
-use crate::error::ApiError;
-use crate::state::AppState;
-use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
-use geo_domain::{LocationPrecision, NewLocation};
-use geo_types::GeoPoint;
-
-pub async fn create_location(
-    State(state): State<AppState>,
-    Json(payload): Json<CreateLocationRequest>,
-) -> Result<impl IntoResponse, ApiError> {
-    let point = GeoPoint::new(payload.longitude, payload.latitude)
-        .map_err(|e| ApiError::Validation(e.to_string()))?;
-
-    let new_loc = NewLocation {
-        point,
-        address_summary: payload.address_summary,
-        precision: payload.precision.unwrap_or(LocationPrecision::Exact),
-        source: payload.source.unwrap_or_else(|| "api".to_string()),
-        source_id: payload.source_id,
-        metadata: payload.metadata.unwrap_or_else(|| serde_json::json!({})),
-    };
-
-    let created = state.location_repo.insert(&new_loc).await?;
-    Ok((StatusCode::CREATED, Json(created)))
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\map-api\src\handlers\map.rs
-======================================================================
-use crate::dto::{BBoxQueryParams, NearbyQueryParams};
-use crate::error::ApiError;
-use crate::state::AppState;
-use axum::{
-    extract::{Query, State},
-    response::IntoResponse,
-    Json,
-};
-use geo_presentation::{ClusterFeature, FeatureCollection, LocationProperties, MapFeature};
-use geo_query::{bbox_query::BBoxSearchOptions, cluster_locations_in_bbox, find_locations_in_bbox, find_locations_within_radius};
-use serde_json::Value;
-
-pub async fn search_viewport(
-    State(state): State<AppState>,
-    Query(params): Query<BBoxQueryParams>,
-) -> Result<impl IntoResponse, ApiError> {
-    let bbox = params.parse_bbox()?;
-    let zoom = params.zoom.unwrap_or(12);
-
-    if zoom < 11 {
-        let grid_size = match zoom {
-            0..=5 => 1.0,
-            6..=8 => 0.25,
-            _ => 0.08,
-        };
-
-        let clusters = cluster_locations_in_bbox(&state.pool, &bbox, grid_size).await?;
-        let cluster_features: Vec<ClusterFeature> = clusters.into_iter().map(ClusterFeature::from).collect();
-        let collection = FeatureCollection::new(cluster_features);
-        Ok(Json(serde_json::to_value(collection).unwrap()))
-    } else {
-        let options = BBoxSearchOptions {
-            limit: params.limit,
-            source: params.source,
-        };
-        let locations = find_locations_in_bbox(&state.pool, &bbox, options).await?;
-        let features: Vec<MapFeature<LocationProperties>> = locations.into_iter().map(MapFeature::from).collect();
-        let collection = FeatureCollection::new(features);
-        Ok(Json(serde_json::to_value(collection).unwrap()))
-    }
-}
-
-pub async fn search_nearby(
-    State(state): State<AppState>,
-    Query(params): Query<NearbyQueryParams>,
-) -> Result<impl IntoResponse, ApiError> {
-    let (center, radius) = params.parse_point_and_radius()?;
-    let results = find_locations_within_radius(&state.pool, &center, &radius, params.limit).await?;
-
-    let features: Vec<Value> = results
-        .into_iter()
-        .map(|item| {
-            serde_json::json!({
-                "type": "Feature",
-                "geometry": {
-                    "type": "Point",
-                    "coordinates": item.location.point.to_coordinates()
-                },
-                "properties": {
-                    "id": item.location.id,
-                    "address_summary": item.location.address_summary,
-                    "distance_meters": item.distance.as_meters()
-                }
-            })
-        })
-        .collect();
-
-    Ok(Json(serde_json::json!({
-        "type": "FeatureCollection",
-        "features": features
-    })))
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\map-api\src\handlers\mod.rs
-======================================================================
-pub mod geocoding;
-pub mod health;
-pub mod locations;
-pub mod map;
-pub mod tiles;
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\apps\map-api\src\handlers\tiles.rs
-======================================================================
-use crate::error::ApiError;
-use crate::state::AppState;
-use axum::{
-    extract::{Path, State},
-    http::{header, HeaderMap, StatusCode},
-    response::IntoResponse,
-};
-use geo_tiles::{get_base_map_mvt_tile, get_locations_mvt_tile, TileCoordinate};
-
-/// Serves multi-layer Base Map Vector Tiles (Roads, Boundaries, Places) from PostGIS.
-pub async fn serve_base_map_tile(
-    State(state): State<AppState>,
-    Path((z, x, tile_str)): Path<(u8, u32, String)>,
-) -> Result<impl IntoResponse, ApiError> {
-    let y_str = tile_str
-        .strip_suffix(".mvt")
-        .or_else(|| tile_str.strip_suffix(".pbf"))
-        .unwrap_or(&tile_str);
-
-    let y: u32 = y_str
-        .parse()
-        .map_err(|_| ApiError::Validation(format!("Invalid tile Y coordinate: {tile_str}")))?;
-
-    let tile = TileCoordinate::new(z, x, y)?;
-    let pbf_bytes = get_base_map_mvt_tile(&state.pool, &tile)
-        .await
-        .map_err(|e| ApiError::Validation(e.to_string()))?;
-
-    let mut headers = HeaderMap::new();
-    headers.insert(header::CONTENT_TYPE, "application/x-protobuf".parse().unwrap());
-    headers.insert(header::CACHE_CONTROL, "public, max-age=3600".parse().unwrap());
-
-    Ok((StatusCode::OK, headers, pbf_bytes))
-}
-
-/// Serves dynamic Locations layer MVT.
-pub async fn serve_vector_tile(
-    State(state): State<AppState>,
-    Path((z, x, tile_str)): Path<(u8, u32, String)>,
-) -> Result<impl IntoResponse, ApiError> {
-    let y_str = tile_str
-        .strip_suffix(".mvt")
-        .or_else(|| tile_str.strip_suffix(".pbf"))
-        .unwrap_or(&tile_str);
-
-    let y: u32 = y_str
-        .parse()
-        .map_err(|_| ApiError::Validation(format!("Invalid tile Y coordinate: {tile_str}")))?;
-
-    let tile = TileCoordinate::new(z, x, y)?;
-    let pbf_bytes = get_locations_mvt_tile(&state.pool, &tile)
-        .await
-        .map_err(|e| ApiError::Validation(e.to_string()))?;
-
-    let mut headers = HeaderMap::new();
-    headers.insert(header::CONTENT_TYPE, "application/x-protobuf".parse().unwrap());
-    headers.insert(header::CACHE_CONTROL, "public, max-age=300".parse().unwrap());
-
-    Ok((StatusCode::OK, headers, pbf_bytes))
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\Cargo.toml
-======================================================================
-[package]
-name = "biz-api"
-version.workspace = true
-edition.workspace = true
-authors.workspace = true
-license.workspace = true
-
-[dependencies]
-biz-domain = { path = "../../crates/biz-domain" }
-biz-storage = { path = "../../crates/biz-storage" }
-biz-application = { path = "../../crates/biz-application" }
-geo-types = { path = "../../crates/geo-types" }
-geo-storage = { path = "../../crates/geo-storage" }
-
-axum.workspace = true
-tokio.workspace = true
-tower.workspace = true
-tower-http.workspace = true
-tracing.workspace = true
-tracing-subscriber.workspace = true
-sqlx.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-utoipa.workspace = true
-utoipa-swagger-ui.workspace = true
-uuid.workspace = true
-chrono.workspace = true
-thiserror.workspace = true
-rust_decimal.workspace = true
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\error.rs
-======================================================================
-use biz_domain::DomainError;
-use biz_storage::StorageError;
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-pub enum ApplicationError {
-    #[error("Domain error: {0}")]
-    Domain(#[from] DomainError),
-
-    #[error("Storage error: {0}")]
-    Storage(#[from] StorageError),
-
-    #[error("Unauthorized: {0}")]
-    Unauthorized(String),
-
-    #[error("Validation failed: {0}")]
-    Validation(String),
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\lib.rs
-======================================================================
-pub mod application;
-pub mod candidate;
-pub mod discovery;
-pub mod error;
-pub mod governance;
-pub mod identity;
-pub mod opportunity;
-pub mod saved;
-
-pub use error::ApplicationError;
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\application\dto.rs
-======================================================================
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -1821,22 +179,20 @@ pub struct ApplicationDto {
     pub status: String,
 }
 
+--------------------------------------------------
+FILE: biz-application\src\application\mod.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\application\mod.rs
-======================================================================
 pub mod dto;
 pub mod use_cases;
 
 pub use dto::{ApplicationDto, ChangeApplicationStatusCommand, SubmitApplicationCommand};
 pub use use_cases::ApplicationUseCases;
 
+--------------------------------------------------
+FILE: biz-application\src\application\use_cases.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\application\use_cases.rs
-======================================================================
 use super::dto::{ApplicationDto, ChangeApplicationStatusCommand, SubmitApplicationCommand};
 use crate::error::ApplicationError;
 use biz_domain::application::{Application, ApplicationStatus, NewApplication};
@@ -1954,11 +310,10 @@ impl ApplicationUseCases {
     }
 }
 
+--------------------------------------------------
+FILE: biz-application\src\candidate\dto.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\candidate\dto.rs
-======================================================================
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -1992,22 +347,20 @@ pub struct CandidateProfileDto {
     pub preferred_city: Option<String>,
 }
 
+--------------------------------------------------
+FILE: biz-application\src\candidate\mod.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\candidate\mod.rs
-======================================================================
 pub mod dto;
 pub mod use_cases;
 
 pub use dto::{AddExperienceCommand, CandidateProfileDto, UpdateProfileCommand};
 pub use use_cases::CandidateUseCases;
 
+--------------------------------------------------
+FILE: biz-application\src\candidate\use_cases.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\candidate\use_cases.rs
-======================================================================
 use super::dto::{AddExperienceCommand, CandidateProfileDto, UpdateProfileCommand};
 use crate::error::ApplicationError;
 use biz_storage::{CandidateRepository, StorageError};
@@ -2114,11 +467,10 @@ impl CandidateUseCases {
     }
 }
 
+--------------------------------------------------
+FILE: biz-application\src\discovery\dto.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\discovery\dto.rs
-======================================================================
 use rust_decimal::Decimal;
 use serde::Deserialize;
 use uuid::Uuid;
@@ -2141,22 +493,20 @@ pub struct SearchOpportunitiesRequest {
     pub limit: Option<usize>,
 }
 
+--------------------------------------------------
+FILE: biz-application\src\discovery\mod.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\discovery\mod.rs
-======================================================================
 pub mod dto;
 pub mod use_cases;
 
 pub use dto::SearchOpportunitiesRequest;
 pub use use_cases::DiscoveryUseCases;
 
+--------------------------------------------------
+FILE: biz-application\src\discovery\use_cases.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\discovery\use_cases.rs
-======================================================================
 use super::dto::SearchOpportunitiesRequest;
 use crate::error::ApplicationError;
 use biz_domain::discovery::{SearchPageResult, SearchQuery, SortBy};
@@ -2223,11 +573,10 @@ impl DiscoveryUseCases {
     }
 }
 
+--------------------------------------------------
+FILE: biz-application\src\governance\dto.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\governance\dto.rs
-======================================================================
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -2244,22 +593,20 @@ pub struct SubmitVerificationCommand {
     pub evidence_storage_keys: Vec<String>,
 }
 
+--------------------------------------------------
+FILE: biz-application\src\governance\mod.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\governance\mod.rs
-======================================================================
 pub mod dto;
 pub mod use_cases;
 
 pub use dto::{CreateReportCommand, SubmitVerificationCommand};
 pub use use_cases::GovernanceUseCases;
 
+--------------------------------------------------
+FILE: biz-application\src\governance\use_cases.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\governance\use_cases.rs
-======================================================================
 use super::dto::{CreateReportCommand, SubmitVerificationCommand};
 use crate::error::ApplicationError;
 use biz_storage::{CompanyRepository, GovernanceRepository};
@@ -2337,11 +684,10 @@ impl GovernanceUseCases {
     }
 }
 
+--------------------------------------------------
+FILE: biz-application\src\identity\auth_use_cases.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\identity\auth_use_cases.rs
-======================================================================
 use super::dto::{AuthResponseDto, LoginCommand, RegisterCommand};
 use crate::error::ApplicationError;
 use biz_domain::identity::{Email, NewUser, RawPassword};
@@ -2477,11 +823,10 @@ impl AuthUseCases {
     }
 }
 
+--------------------------------------------------
+FILE: biz-application\src\identity\dto.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\identity\dto.rs
-======================================================================
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -2507,22 +852,20 @@ pub struct AuthResponseDto {
     pub expires_in_secs: u64,
 }
 
+--------------------------------------------------
+FILE: biz-application\src\identity\mod.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\identity\mod.rs
-======================================================================
 pub mod auth_use_cases;
 pub mod dto;
 
 pub use auth_use_cases::AuthUseCases;
 pub use dto::{AuthResponseDto, LoginCommand, RegisterCommand};
 
+--------------------------------------------------
+FILE: biz-application\src\opportunity\dto.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\opportunity\dto.rs
-======================================================================
 use biz_domain::opportunity::{OpportunityType, RemoteScope, Salary, WorkplaceType};
 use biz_domain::taxonomy::ExperienceLevel;
 use serde::{Deserialize, Serialize};
@@ -2544,22 +887,20 @@ pub struct CreateOpportunityCommand {
     pub skill_ids: Vec<Uuid>,
 }
 
+--------------------------------------------------
+FILE: biz-application\src\opportunity\mod.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\opportunity\mod.rs
-======================================================================
 pub mod dto;
 pub mod use_cases;
 
 pub use dto::CreateOpportunityCommand;
 pub use use_cases::OpportunityUseCases;
 
+--------------------------------------------------
+FILE: biz-application\src\opportunity\use_cases.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\opportunity\use_cases.rs
-======================================================================
 use super::dto::CreateOpportunityCommand;
 use crate::error::ApplicationError;
 use biz_domain::company::CompanyRole;
@@ -2677,11 +1018,10 @@ impl OpportunityUseCases {
     }
 }
 
+--------------------------------------------------
+FILE: biz-application\src\saved\dto.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\saved\dto.rs
-======================================================================
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -2691,22 +1031,20 @@ pub struct SaveSearchCommand {
     pub criteria: serde_json::Value,
 }
 
+--------------------------------------------------
+FILE: biz-application\src\saved\mod.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\saved\mod.rs
-======================================================================
 pub mod dto;
 pub mod use_cases;
 
 pub use dto::SaveSearchCommand;
 pub use use_cases::SavedUseCases;
 
+--------------------------------------------------
+FILE: biz-application\src\saved\use_cases.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-application\src\saved\use_cases.rs
-======================================================================
 use super::dto::SaveSearchCommand;
 use crate::error::ApplicationError;
 use biz_domain::discovery::{CompanySummary, OpportunitySearchResult};
@@ -2775,13 +1113,50 @@ impl SavedUseCases {
     }
 }
 
+--------------------------------------------------
+FILE: biz-application\src\error.rs
+--------------------------------------------------
 
+use biz_domain::DomainError;
+use biz_storage::StorageError;
+use thiserror::Error;
 
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\Cargo.toml
-======================================================================
+#[derive(Debug, Error)]
+pub enum ApplicationError {
+    #[error("Domain error: {0}")]
+    Domain(#[from] DomainError),
+
+    #[error("Storage error: {0}")]
+    Storage(#[from] StorageError),
+
+    #[error("Unauthorized: {0}")]
+    Unauthorized(String),
+
+    #[error("Validation failed: {0}")]
+    Validation(String),
+}
+
+--------------------------------------------------
+FILE: biz-application\src\lib.rs
+--------------------------------------------------
+
+pub mod application;
+pub mod candidate;
+pub mod discovery;
+pub mod error;
+pub mod governance;
+pub mod identity;
+pub mod opportunity;
+pub mod saved;
+
+pub use error::ApplicationError;
+
+--------------------------------------------------
+FILE: biz-application\Cargo.toml
+--------------------------------------------------
+
 [package]
-name = "biz-domain"
+name = "biz-application"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -2789,70 +1164,20 @@ license.workspace = true
 
 [dependencies]
 geo-types = { path = "../geo-types" }
+biz-domain = { path = "../biz-domain" }
+biz-storage = { path = "../biz-storage" }
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 rust_decimal.workspace = true
 
+--------------------------------------------------
+FILE: biz-domain\src\application\entity.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\error.rs
-======================================================================
-use thiserror::Error;
-
-#[derive(Debug, Error, PartialEq, Clone)]
-pub enum DomainError {
-    #[error("Invalid email format: {0}")]
-    InvalidEmail(String),
-
-    #[error("Password is too weak: must be at least 8 characters.")]
-    WeakPassword,
-
-    #[error("Invalid phone number: {0}")]
-    InvalidPhoneNumber(String),
-
-    #[error("Entity not found: {0}")]
-    NotFound(String),
-
-    #[error("Business invariant violated: {0}")]
-    InvariantViolation(String),
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\lib.rs
-======================================================================
-pub mod application;
-pub mod candidate;
-pub mod company;
-pub mod discovery;
-pub mod error;
-pub mod governance;
-pub mod identity;
-pub mod opportunity;
-pub mod saved;
-pub mod taxonomy;
-
-pub use application::{Application, ApplicationStatus, NewApplication};
-pub use candidate::{Candidate, CandidateEducation, CandidateExperience, CandidateResume};
-pub use company::{Company, CompanyMembership, CompanyRole, CompanyVerificationStatus, NewCompany};
-pub use discovery::{CompanySummary, OpportunitySearchResult, SearchPageResult, SearchQuery, SortBy};
-pub use error::DomainError;
-pub use governance::{AdminRole, AuditLog, ModerationCase, Report, VerificationStatus};
-pub use identity::{Email, NewUser, RawPassword, User, UserStatus};
-pub use opportunity::{NewOpportunity, Opportunity, OpportunityStatus, OpportunityType, RemoteScope, Salary, WorkplaceType};
-pub use saved::{CandidatePreferences, SavedCompany, SavedOpportunity, SavedSearch};
-pub use taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skill, SkillAlias};
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\application\entity.rs
-======================================================================
 use super::lifecycle::ApplicationStatus;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -2878,11 +1203,10 @@ pub struct NewApplication {
     pub cover_letter: Option<String>,
 }
 
+--------------------------------------------------
+FILE: biz-domain\src\application\lifecycle.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\application\lifecycle.rs
-======================================================================
 use crate::error::DomainError;
 use serde::{Deserialize, Serialize};
 
@@ -2944,22 +1268,20 @@ impl ApplicationStatus {
     }
 }
 
+--------------------------------------------------
+FILE: biz-domain\src\application\mod.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\application\mod.rs
-======================================================================
 pub mod entity;
 pub mod lifecycle;
 
 pub use entity::{Application, NewApplication};
 pub use lifecycle::ApplicationStatus;
 
+--------------------------------------------------
+FILE: biz-domain\src\candidate\entity.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\candidate\entity.rs
-======================================================================
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -3015,20 +1337,18 @@ pub struct CandidateResume {
     pub created_at: DateTime<Utc>,
 }
 
+--------------------------------------------------
+FILE: biz-domain\src\candidate\mod.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\candidate\mod.rs
-======================================================================
 pub mod entity;
 
 pub use entity::{Candidate, CandidateEducation, CandidateExperience, CandidateResume};
 
+--------------------------------------------------
+FILE: biz-domain\src\company\entity.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\company\entity.rs
-======================================================================
 use super::membership::CompanyRole;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -3082,11 +1402,10 @@ pub struct NewCompany {
     pub website: Option<String>,
 }
 
+--------------------------------------------------
+FILE: biz-domain\src\company\membership.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\company\membership.rs
-======================================================================
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -3135,33 +1454,30 @@ impl CompanyRole {
     }
 }
 
+--------------------------------------------------
+FILE: biz-domain\src\company\mod.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\company\mod.rs
-======================================================================
 pub mod entity;
 pub mod membership;
 
 pub use entity::{Company, CompanyMembership, CompanyVerificationStatus, NewCompany};
 pub use membership::CompanyRole;
 
+--------------------------------------------------
+FILE: biz-domain\src\discovery\mod.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\discovery\mod.rs
-======================================================================
 pub mod query;
 pub mod read_model;
 
 pub use query::{SearchQuery, SortBy};
 pub use read_model::{CompanySummary, OpportunitySearchResult, SearchPageResult};
 
+--------------------------------------------------
+FILE: biz-domain\src\discovery\query.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\discovery\query.rs
-======================================================================
 use geo_types::{BoundingBox, GeoPoint, Radius};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -3204,11 +1520,10 @@ pub struct SearchQuery {
     pub limit: usize,
 }
 
+--------------------------------------------------
+FILE: biz-domain\src\discovery\read_model.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\discovery\read_model.rs
-======================================================================
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -3248,11 +1563,10 @@ pub struct SearchPageResult {
     pub has_more: bool,
 }
 
+--------------------------------------------------
+FILE: biz-domain\src\governance\audit.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\governance\audit.rs
-======================================================================
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -3269,11 +1583,10 @@ pub struct AuditLog {
     pub created_at: DateTime<Utc>,
 }
 
+--------------------------------------------------
+FILE: biz-domain\src\governance\mod.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\governance\mod.rs
-======================================================================
 pub mod audit;
 pub mod moderation;
 pub mod verification;
@@ -3282,11 +1595,10 @@ pub use audit::AuditLog;
 pub use moderation::{AdminRole, ModerationCase, Report};
 pub use verification::VerificationStatus;
 
+--------------------------------------------------
+FILE: biz-domain\src\governance\moderation.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\governance\moderation.rs
-======================================================================
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -3348,11 +1660,10 @@ pub struct ModerationCase {
     pub internal_notes: Option<String>, // Staff-only private notes
 }
 
+--------------------------------------------------
+FILE: biz-domain\src\governance\verification.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\governance\verification.rs
-======================================================================
 use crate::error::DomainError;
 use serde::{Deserialize, Serialize};
 
@@ -3416,11 +1727,10 @@ impl VerificationStatus {
     }
 }
 
+--------------------------------------------------
+FILE: biz-domain\src\identity\credentials.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\identity\credentials.rs
-======================================================================
 use crate::error::DomainError;
 use serde::{Deserialize, Serialize};
 
@@ -3457,22 +1767,20 @@ impl RawPassword {
     }
 }
 
+--------------------------------------------------
+FILE: biz-domain\src\identity\mod.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\identity\mod.rs
-======================================================================
 pub mod credentials;
 pub mod user;
 
 pub use credentials::{Email, RawPassword};
 pub use user::{NewUser, User, UserStatus};
 
+--------------------------------------------------
+FILE: biz-domain\src\identity\user.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\identity\user.rs
-======================================================================
 use super::credentials::Email;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -3509,11 +1817,10 @@ pub struct NewUser {
     pub password_hash: String,
 }
 
+--------------------------------------------------
+FILE: biz-domain\src\opportunity\entity.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\opportunity\entity.rs
-======================================================================
 use super::lifecycle::OpportunityStatus;
 use crate::error::DomainError;
 use crate::taxonomy::ExperienceLevel;
@@ -3678,11 +1985,10 @@ impl NewOpportunity {
     }
 }
 
+--------------------------------------------------
+FILE: biz-domain\src\opportunity\lifecycle.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\opportunity\lifecycle.rs
-======================================================================
 use crate::error::DomainError;
 use serde::{Deserialize, Serialize};
 
@@ -3741,22 +2047,20 @@ impl OpportunityStatus {
     }
 }
 
+--------------------------------------------------
+FILE: biz-domain\src\opportunity\mod.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\opportunity\mod.rs
-======================================================================
 pub mod entity;
 pub mod lifecycle;
 
 pub use entity::{NewOpportunity, Opportunity, OpportunityType, RemoteScope, Salary, WorkplaceType};
 pub use lifecycle::OpportunityStatus;
 
+--------------------------------------------------
+FILE: biz-domain\src\saved\entity.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\saved\entity.rs
-======================================================================
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -3796,20 +2100,18 @@ pub struct CandidatePreferences {
     pub updated_at: DateTime<Utc>,
 }
 
+--------------------------------------------------
+FILE: biz-domain\src\saved\mod.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\saved\mod.rs
-======================================================================
 pub mod entity;
 
 pub use entity::{CandidatePreferences, SavedCompany, SavedOpportunity, SavedSearch};
 
+--------------------------------------------------
+FILE: biz-domain\src\taxonomy\category.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\taxonomy\category.rs
-======================================================================
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -3824,11 +2126,10 @@ pub struct Category {
     pub updated_at: DateTime<Utc>,
 }
 
+--------------------------------------------------
+FILE: biz-domain\src\taxonomy\experience_level.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\taxonomy\experience_level.rs
-======================================================================
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -3867,11 +2168,10 @@ impl ExperienceLevel {
     }
 }
 
+--------------------------------------------------
+FILE: biz-domain\src\taxonomy\industry.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\taxonomy\industry.rs
-======================================================================
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -3886,11 +2186,10 @@ pub struct Industry {
     pub updated_at: DateTime<Utc>,
 }
 
+--------------------------------------------------
+FILE: biz-domain\src\taxonomy\mod.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\taxonomy\mod.rs
-======================================================================
 pub mod category;
 pub mod experience_level;
 pub mod industry;
@@ -3903,11 +2202,10 @@ pub use industry::Industry;
 pub use occupation::Occupation;
 pub use skill::{Skill, SkillAlias};
 
+--------------------------------------------------
+FILE: biz-domain\src\taxonomy\occupation.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\taxonomy\occupation.rs
-======================================================================
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -3920,11 +2218,10 @@ pub struct Occupation {
     pub created_at: DateTime<Utc>,
 }
 
+--------------------------------------------------
+FILE: biz-domain\src\taxonomy\skill.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-domain\src\taxonomy\skill.rs
-======================================================================
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -3944,13 +2241,62 @@ pub struct SkillAlias {
     pub created_at: DateTime<Utc>,
 }
 
+--------------------------------------------------
+FILE: biz-domain\src\error.rs
+--------------------------------------------------
 
+use thiserror::Error;
 
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-storage\Cargo.toml
-======================================================================
+#[derive(Debug, Error, PartialEq, Clone)]
+pub enum DomainError {
+    #[error("Invalid email format: {0}")]
+    InvalidEmail(String),
+
+    #[error("Password is too weak: must be at least 8 characters.")]
+    WeakPassword,
+
+    #[error("Invalid phone number: {0}")]
+    InvalidPhoneNumber(String),
+
+    #[error("Entity not found: {0}")]
+    NotFound(String),
+
+    #[error("Business invariant violated: {0}")]
+    InvariantViolation(String),
+}
+
+--------------------------------------------------
+FILE: biz-domain\src\lib.rs
+--------------------------------------------------
+
+pub mod application;
+pub mod candidate;
+pub mod company;
+pub mod discovery;
+pub mod error;
+pub mod governance;
+pub mod identity;
+pub mod opportunity;
+pub mod saved;
+pub mod taxonomy;
+
+pub use application::{Application, ApplicationStatus, NewApplication};
+pub use candidate::{Candidate, CandidateEducation, CandidateExperience, CandidateResume};
+pub use company::{Company, CompanyMembership, CompanyRole, CompanyVerificationStatus, NewCompany};
+pub use discovery::{CompanySummary, OpportunitySearchResult, SearchPageResult, SearchQuery, SortBy};
+pub use error::DomainError;
+pub use governance::{AdminRole, AuditLog, ModerationCase, Report, VerificationStatus};
+pub use identity::{Email, NewUser, RawPassword, User, UserStatus};
+pub use opportunity::{NewOpportunity, Opportunity, OpportunityStatus, OpportunityType, RemoteScope, Salary, WorkplaceType};
+pub use saved::{CandidatePreferences, SavedCompany, SavedOpportunity, SavedSearch};
+pub use taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skill, SkillAlias};
+
+--------------------------------------------------
+FILE: biz-domain\Cargo.toml
+--------------------------------------------------
+
 [package]
-name = "biz-storage"
+name = "biz-domain"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -3958,26 +2304,17 @@ license.workspace = true
 
 [dependencies]
 geo-types = { path = "../geo-types" }
-biz-domain = { path = "../biz-domain" }
-sqlx.workspace = true
-tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
-tracing.workspace = true
-argon2.workspace = true
-jsonwebtoken.workspace = true
-rand.workspace = true
-sha2.workspace = true
-serde.workspace = true
-serde_json.workspace = true
 rust_decimal.workspace = true
 
+--------------------------------------------------
+FILE: biz-storage\src\application_repo.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-storage\src\application_repo.rs
-======================================================================
 use crate::error::StorageError;
 use biz_domain::application::{Application, ApplicationStatus, NewApplication};
 use chrono::{DateTime, Utc};
@@ -4091,11 +2428,10 @@ impl ApplicationRepository {
     }
 }
 
+--------------------------------------------------
+FILE: biz-storage\src\candidate_repo.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-storage\src\candidate_repo.rs
-======================================================================
 use crate::error::StorageError;
 use biz_domain::candidate::{Candidate, CandidateEducation, CandidateExperience, CandidateResume};
 use chrono::{DateTime, NaiveDate, Utc};
@@ -4271,11 +2607,10 @@ impl CandidateRepository {
     }
 }
 
+--------------------------------------------------
+FILE: biz-storage\src\company_repo.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-storage\src\company_repo.rs
-======================================================================
 use crate::error::StorageError;
 use biz_domain::company::{Company, CompanyMembership, CompanyRole, CompanyVerificationStatus, NewCompany};
 use chrono::{DateTime, Utc};
@@ -4461,11 +2796,10 @@ impl CompanyRepository {
     }
 }
 
+--------------------------------------------------
+FILE: biz-storage\src\discovery_repo.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-storage\src\discovery_repo.rs
-======================================================================
 use crate::error::StorageError;
 use biz_domain::discovery::{CompanySummary, OpportunitySearchResult, SearchPageResult, SearchQuery, SortBy};
 use chrono::{DateTime, Utc};
@@ -4623,11 +2957,10 @@ impl DiscoveryRepository {
     }
 }
 
+--------------------------------------------------
+FILE: biz-storage\src\error.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-storage\src\error.rs
-======================================================================
 use biz_domain::DomainError;
 use thiserror::Error;
 
@@ -4658,11 +2991,10 @@ pub enum StorageError {
     Security(String),
 }
 
+--------------------------------------------------
+FILE: biz-storage\src\governance_repo.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-storage\src\governance_repo.rs
-======================================================================
 use crate::error::StorageError;
 use biz_domain::governance::{AdminRole, VerificationStatus};
 use chrono::{DateTime, Utc};
@@ -4784,11 +3116,10 @@ impl GovernanceRepository {
     }
 }
 
+--------------------------------------------------
+FILE: biz-storage\src\lib.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-storage\src\lib.rs
-======================================================================
 pub mod application_repo;
 pub mod candidate_repo;
 pub mod company_repo;
@@ -4817,11 +3148,10 @@ pub use token_repo::TokenRepository;
 pub use token_service::{Claims, TokenPair, TokenService};
 pub use user_repo::UserRepository;
 
+--------------------------------------------------
+FILE: biz-storage\src\opportunity_repo.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-storage\src\opportunity_repo.rs
-======================================================================
 use crate::error::StorageError;
 use biz_domain::opportunity::{
     NewOpportunity, Opportunity, OpportunityStatus, OpportunityType, RemoteScope, Salary, WorkplaceType,
@@ -4996,11 +3326,10 @@ impl OpportunityRepository {
     }
 }
 
+--------------------------------------------------
+FILE: biz-storage\src\saved_repo.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-storage\src\saved_repo.rs
-======================================================================
 use crate::error::StorageError;
 use biz_domain::discovery::{CompanySummary, OpportunitySearchResult};
 use biz_domain::saved::{CandidatePreferences, SavedSearch};
@@ -5200,11 +3529,10 @@ impl SavedRepository {
     }
 }
 
+--------------------------------------------------
+FILE: biz-storage\src\security.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-storage\src\security.rs
-======================================================================
 use crate::error::StorageError;
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
@@ -5237,11 +3565,10 @@ impl PasswordService {
     }
 }
 
+--------------------------------------------------
+FILE: biz-storage\src\taxonomy_repo.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-storage\src\taxonomy_repo.rs
-======================================================================
 use crate::error::StorageError;
 use biz_domain::taxonomy::{Category, Industry, Occupation, Skill};
 use chrono::{DateTime, Utc};
@@ -5387,11 +3714,10 @@ impl TaxonomyRepository {
     }
 }
 
+--------------------------------------------------
+FILE: biz-storage\src\token_repo.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-storage\src\token_repo.rs
-======================================================================
 use crate::error::StorageError;
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
@@ -5479,11 +3805,10 @@ impl TokenRepository {
     }
 }
 
+--------------------------------------------------
+FILE: biz-storage\src\token_service.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-storage\src\token_service.rs
-======================================================================
 use crate::error::StorageError;
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
@@ -5577,11 +3902,10 @@ impl TokenService {
     }
 }
 
+--------------------------------------------------
+FILE: biz-storage\src\user_repo.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\biz-storage\src\user_repo.rs
-======================================================================
 use crate::error::StorageError;
 use biz_domain::identity::{NewUser, User, UserStatus};
 use chrono::{DateTime, Utc};
@@ -5692,13 +4016,12 @@ impl UserRepository {
     }
 }
 
+--------------------------------------------------
+FILE: biz-storage\Cargo.toml
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-domain\Cargo.toml
-======================================================================
 [package]
-name = "geo-domain"
+name = "biz-storage"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -5706,26 +4029,33 @@ license.workspace = true
 
 [dependencies]
 geo-types = { path = "../geo-types" }
-serde.workspace = true
-serde_json.workspace = true
+biz-domain = { path = "../biz-domain" }
+sqlx.workspace = true
+tokio.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
+argon2.workspace = true
+jsonwebtoken.workspace = true
+rand.workspace = true
+sha2.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rust_decimal.workspace = true
 
+--------------------------------------------------
+FILE: geo-domain\src\lib.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-domain\src\lib.rs
-======================================================================
 pub mod location;
 
 pub use location::{Location, LocationPrecision, NewLocation};
 
+--------------------------------------------------
+FILE: geo-domain\src\location.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-domain\src\location.rs
-======================================================================
 use chrono::{DateTime, Utc};
 use geo_types::GeoPoint;
 use serde::{Deserialize, Serialize};
@@ -5771,13 +4101,12 @@ pub struct NewLocation {
     pub metadata: serde_json::Value,
 }
 
+--------------------------------------------------
+FILE: geo-domain\Cargo.toml
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-geocoding\Cargo.toml
-======================================================================
 [package]
-name = "geo-geocoding"
+name = "geo-domain"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -5785,21 +4114,16 @@ license.workspace = true
 
 [dependencies]
 geo-types = { path = "../geo-types" }
-geo-domain = { path = "../geo-domain" }
-geo-storage = { path = "../geo-storage" }
-sqlx.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
-tracing.workspace = true
 
+--------------------------------------------------
+FILE: geo-geocoding\src\admin_repo.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-geocoding\src\admin_repo.rs
-======================================================================
 use crate::error::GeocodingError;
 use crate::models::AdministrativeArea;
 use geo_types::GeoPoint;
@@ -5872,11 +4196,10 @@ pub async fn find_areas_by_parent(
     rows.into_iter().map(AdministrativeArea::try_from).collect()
 }
 
+--------------------------------------------------
+FILE: geo-geocoding\src\error.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-geocoding\src\error.rs
-======================================================================
 use geo_types::GeoError;
 use thiserror::Error;
 
@@ -5892,11 +4215,10 @@ pub enum GeocodingError {
     NotFound(uuid::Uuid),
 }
 
+--------------------------------------------------
+FILE: geo-geocoding\src\lib.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-geocoding\src\lib.rs
-======================================================================
 pub mod admin_repo;
 pub mod error;
 pub mod models;
@@ -5907,11 +4229,10 @@ pub use error::GeocodingError;
 pub use models::{AdministrativeArea, AreaBreadcrumb, ReverseGeocodeResult};
 pub use reverse::reverse_geocode_point;
 
+--------------------------------------------------
+FILE: geo-geocoding\src\models.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-geocoding\src\models.rs
-======================================================================
 use geo_types::GeoPoint;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -5952,11 +4273,10 @@ pub struct ReverseGeocodeResult {
     pub hierarchy: Vec<AreaBreadcrumb>,
 }
 
+--------------------------------------------------
+FILE: geo-geocoding\src\reverse.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-geocoding\src\reverse.rs
-======================================================================
 use crate::admin_repo::AdminAreaDbRow;
 use crate::error::GeocodingError;
 use crate::models::{AdministrativeArea, AreaBreadcrumb, ReverseGeocodeResult};
@@ -6175,13 +4495,12 @@ pub async fn reverse_geocode_point(
     }))
 }
 
+--------------------------------------------------
+FILE: geo-geocoding\Cargo.toml
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-presentation\Cargo.toml
-======================================================================
 [package]
-name = "geo-presentation"
+name = "geo-geocoding"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -6190,16 +4509,19 @@ license.workspace = true
 [dependencies]
 geo-types = { path = "../geo-types" }
 geo-domain = { path = "../geo-domain" }
-geo-query = { path = "../geo-query" }
+geo-storage = { path = "../geo-storage" }
+sqlx.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
 
+--------------------------------------------------
+FILE: geo-presentation\src\cluster.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-presentation\src\cluster.rs
-======================================================================
 use crate::feature::{GeoJsonGeometry, MapFeature};
 use geo_query::LocationCluster;
 use serde::{Deserialize, Serialize};
@@ -6237,11 +4559,10 @@ impl From<LocationCluster> for ClusterFeature {
     }
 }
 
+--------------------------------------------------
+FILE: geo-presentation\src\feature.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-presentation\src\feature.rs
-======================================================================
 use geo_domain::Location;
 use geo_types::GeoPoint;
 use serde::{Deserialize, Serialize};
@@ -6319,11 +4640,10 @@ impl From<Location> for MapFeature<LocationProperties> {
     }
 }
 
+--------------------------------------------------
+FILE: geo-presentation\src\lib.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-presentation\src\lib.rs
-======================================================================
 pub mod cluster;
 pub mod feature;
 pub mod marker;
@@ -6332,11 +4652,10 @@ pub use cluster::{ClusterFeature, ClusterProperties};
 pub use feature::{FeatureCollection, GeoJsonGeometry, LocationProperties, MapFeature};
 pub use marker::MarkerDto;
 
+--------------------------------------------------
+FILE: geo-presentation\src\marker.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-presentation\src\marker.rs
-======================================================================
 use geo_domain::Location;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -6359,13 +4678,12 @@ impl From<Location> for MarkerDto {
     }
 }
 
+--------------------------------------------------
+FILE: geo-presentation\Cargo.toml
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-query\Cargo.toml
-======================================================================
 [package]
-name = "geo-query"
+name = "geo-presentation"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -6374,20 +4692,15 @@ license.workspace = true
 [dependencies]
 geo-types = { path = "../geo-types" }
 geo-domain = { path = "../geo-domain" }
-geo-storage = { path = "../geo-storage" }
-sqlx.workspace = true
+geo-query = { path = "../geo-query" }
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
-chrono.workspace = true
-thiserror.workspace = true
-tracing.workspace = true
 
+--------------------------------------------------
+FILE: geo-query\src\bbox_query.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-query\src\bbox_query.rs
-======================================================================
 use crate::error::QueryError;
 use geo_domain::Location;
 use geo_storage::models::LocationDbRow;
@@ -6453,11 +4766,10 @@ pub async fn find_locations_in_bbox(
         .collect()
 }
 
+--------------------------------------------------
+FILE: geo-query\src\clustering.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-query\src\clustering.rs
-======================================================================
 use crate::error::QueryError;
 use crate::models::LocationCluster;
 use geo_types::{BoundingBox, GeoPoint};
@@ -6520,11 +4832,10 @@ pub async fn cluster_locations_in_bbox(
     Ok(clusters)
 }
 
+--------------------------------------------------
+FILE: geo-query\src\error.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-query\src\error.rs
-======================================================================
 use geo_types::GeoError;
 use geo_storage::StorageError;
 use thiserror::Error;
@@ -6547,11 +4858,10 @@ pub enum QueryError {
     BBoxAreaTooLarge,
 }
 
+--------------------------------------------------
+FILE: geo-query\src\lib.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-query\src\lib.rs
-======================================================================
 pub mod bbox_query;
 pub mod clustering;
 pub mod error;
@@ -6564,11 +4874,10 @@ pub use error::QueryError;
 pub use models::{LocationCluster, NearbyLocation};
 pub use radius_query::{find_locations_within_radius, find_nearest_neighbors};
 
+--------------------------------------------------
+FILE: geo-query\src\models.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-query\src\models.rs
-======================================================================
 use geo_domain::Location;
 use geo_types::{BoundingBox, Distance, GeoPoint};
 use serde::{Deserialize, Serialize};
@@ -6588,11 +4897,10 @@ pub struct LocationCluster {
     pub bounds: BoundingBox,
 }
 
+--------------------------------------------------
+FILE: geo-query\src\radius_query.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-query\src\radius_query.rs
-======================================================================
 use crate::error::QueryError;
 use crate::models::NearbyLocation;
 use geo_domain::Location;
@@ -6714,23 +5022,12 @@ pub async fn find_nearest_neighbors(
         .collect()
 }
 
+--------------------------------------------------
+FILE: geo-query\Cargo.toml
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-storage\build.rs
-======================================================================
-fn main() {
-    // Recompile this crate whenever any migration script is added or modified
-    println!("cargo:rerun-if-changed=../../migrations");
-}
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-storage\Cargo.toml
-======================================================================
 [package]
-name = "geo-storage"
+name = "geo-query"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -6739,22 +5036,19 @@ license.workspace = true
 [dependencies]
 geo-types = { path = "../geo-types" }
 geo-domain = { path = "../geo-domain" }
+geo-storage = { path = "../geo-storage" }
 sqlx.workspace = true
-tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 uuid.workspace = true
 chrono.workspace = true
-serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 
-[dev-dependencies]
-dotenvy = "0.15"
+--------------------------------------------------
+FILE: geo-storage\src\error.rs
+--------------------------------------------------
 
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-storage\src\error.rs
-======================================================================
 use geo_types::GeoError;
 use thiserror::Error;
 
@@ -6773,11 +5067,10 @@ pub enum StorageError {
     Serialization(#[from] serde_json::Error),
 }
 
+--------------------------------------------------
+FILE: geo-storage\src\lib.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-storage\src\lib.rs
-======================================================================
 pub mod error;
 pub mod models;
 pub mod repository;
@@ -6823,11 +5116,10 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), sqlx::migrate::MigrateE
     sqlx::migrate!("../../migrations").run(pool).await
 }
 
+--------------------------------------------------
+FILE: geo-storage\src\models.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-storage\src\models.rs
-======================================================================
 use chrono::{DateTime, Utc};
 use geo_domain::{Location, LocationPrecision};
 use geo_types::GeoPoint;
@@ -6876,11 +5168,10 @@ impl TryFrom<LocationDbRow> for Location {
     }
 }
 
+--------------------------------------------------
+FILE: geo-storage\src\repository.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-storage\src\repository.rs
-======================================================================
 use crate::error::StorageError;
 use crate::models::LocationDbRow;
 use geo_domain::{Location, NewLocation};
@@ -6979,13 +5270,21 @@ impl LocationRepository {
     }
 }
 
+--------------------------------------------------
+FILE: geo-storage\build.rs
+--------------------------------------------------
 
+fn main() {
+    // Recompile this crate whenever any migration script is added or modified
+    println!("cargo:rerun-if-changed=../../migrations");
+}
 
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-tiles\Cargo.toml
-======================================================================
+--------------------------------------------------
+FILE: geo-storage\Cargo.toml
+--------------------------------------------------
+
 [package]
-name = "geo-tiles"
+name = "geo-storage"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -6993,27 +5292,32 @@ license.workspace = true
 
 [dependencies]
 geo-types = { path = "../geo-types" }
+geo-domain = { path = "../geo-domain" }
 sqlx.workspace = true
-serde.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 
+[dev-dependencies]
+dotenvy = "0.15"
 
+--------------------------------------------------
+FILE: geo-tiles\src\lib.rs
+--------------------------------------------------
 
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-tiles\src\lib.rs
-======================================================================
 pub mod mvt;
 pub mod tile_coord;
 
 pub use mvt::{get_base_map_mvt_tile, get_locations_mvt_tile, MvtError};
 pub use tile_coord::{TileCoordinate, TileError};
 
+--------------------------------------------------
+FILE: geo-tiles\src\mvt.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-tiles\src\mvt.rs
-======================================================================
 use crate::tile_coord::{TileCoordinate, TileError};
 use sqlx::PgPool;
 use thiserror::Error;
@@ -7147,11 +5451,10 @@ pub async fn get_locations_mvt_tile(
     Ok(row.0)
 }
 
+--------------------------------------------------
+FILE: geo-tiles\src\tile_coord.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-tiles\src\tile_coord.rs
-======================================================================
 use geo_types::{BoundingBox, GeoError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -7234,30 +5537,28 @@ mod tests {
     }
 }
 
+--------------------------------------------------
+FILE: geo-tiles\Cargo.toml
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-types\Cargo.toml
-======================================================================
 [package]
-name = "geo-types"
+name = "geo-tiles"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
 [dependencies]
+geo-types = { path = "../geo-types" }
+sqlx.workspace = true
 serde.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 
-[dev-dependencies]
-serde_json.workspace = true
+--------------------------------------------------
+FILE: geo-types\src\bbox.rs
+--------------------------------------------------
 
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-types\src\bbox.rs
-======================================================================
 use crate::error::GeoError;
 use crate::point::GeoPoint;
 use serde::{Deserialize, Serialize};
@@ -7354,11 +5655,10 @@ mod tests {
     }
 }
 
+--------------------------------------------------
+FILE: geo-types\src\distance.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-types\src\distance.rs
-======================================================================
 use crate::error::GeoError;
 use serde::{Deserialize, Serialize};
 
@@ -7413,11 +5713,10 @@ mod tests {
     }
 }
 
+--------------------------------------------------
+FILE: geo-types\src\error.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-types\src\error.rs
-======================================================================
 use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq, Clone)]
@@ -7438,11 +5737,10 @@ pub enum GeoError {
     InvalidRadius(f64),
 }
 
+--------------------------------------------------
+FILE: geo-types\src\lib.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-types\src\lib.rs
-======================================================================
 pub mod bbox;
 pub mod distance;
 pub mod error;
@@ -7453,11 +5751,10 @@ pub use distance::{Distance, Radius};
 pub use error::GeoError;
 pub use point::GeoPoint;
 
+--------------------------------------------------
+FILE: geo-types\src\point.rs
+--------------------------------------------------
 
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\crates\geo-types\src\point.rs
-======================================================================
 use crate::error::GeoError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -7551,1248 +5848,20 @@ mod tests {
     }
 }
 
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\docs\api\CONTRACTS.md
-======================================================================
-code
-Markdown
-# Geospatial Platform API Contract
-
-Ù¾Ø§ÛŒÙ‡ Ø¢Ø¯Ø±Ø³ Ø³Ø±ÙˆØ±: `http://localhost:8080`
-
----
-
-## Û±. Ø¬Ø³ØªØ¬ÙˆÛŒ Ø¯ÛŒØ¯Ú¯Ø§Ù‡ Ù†Ù‚Ø´Ù‡ (Viewport Search)
-Ú©Ù„Ø§ÛŒÙ†Øª Ø¨Ø§ Ù‡Ø± Ø¨Ø§Ø± Ø¬Ø§Ø¨Ø¬Ø§ÛŒÛŒ Ù†Ù‚Ø´Ù‡ ÛŒØ§ Ú©Ù„ÛŒÚ© Ø±ÙˆÛŒ "Ø¬Ø³ØªØ¬Ùˆ Ø¯Ø± Ø§ÛŒÙ† Ù…Ø­Ø¯ÙˆØ¯Ù‡"ØŒ Ø§ÛŒÙ† Ø§Ù†Ø¯Ù¾ÙˆÛŒÙ†Øª Ø±Ø§ ØµØ¯Ø§ Ù…ÛŒâ€ŒØ²Ù†Ø¯.
-
-- **Ù…Ø³ÛŒØ±:** `GET /api/v1/map/features`
-- **Ù¾Ø§Ø±Ø§Ù…ØªØ±Ù‡Ø§:**
-  - `bbox`: `west,south,east,north` (Ø§Ø¬Ø¨Ø§Ø±ÛŒ)
-  - `zoom`: Ø³Ø·Ø­ Ø²ÙˆÙ… Ù†Ù‚Ø´Ù‡ Ø¨ÛŒÙ† 0 ØªØ§ 22 (Ø§Ø®ØªÛŒØ§Ø±ÛŒØŒ Ù¾ÛŒØ´â€ŒÙØ±Ø¶ 12)
-  - `limit`: Ø³Ù‚Ù Ù†ØªØ§ÛŒØ¬ (Ø­Ø¯Ø§Ú©Ø«Ø± 1000ØŒ Ù¾ÛŒØ´â€ŒÙØ±Ø¶ 200)
-
-### Ø±ÙØªØ§Ø± Ù‡ÙˆØ´Ù…Ù†Ø¯ Ù†Ø³Ø¨Øª Ø¨Ù‡ Ø²ÙˆÙ… (Zoom-aware):
-- Ø¯Ø± Ø²ÙˆÙ…â€ŒÙ‡Ø§ÛŒ Ù¾Ø§ÛŒÛŒÙ† (`zoom < 11`): Ø³Ø±ÙˆØ± Ø¨Ù‡ ØµÙˆØ±Øª Ø®ÙˆØ¯Ú©Ø§Ø± Ø®ÙˆØ´Ù‡â€ŒÙ‡Ø§ (`Clusters`) Ø±Ø§ Ø¨Ø±Ù…ÛŒâ€ŒÚ¯Ø±Ø¯Ø§Ù†Ø¯ ØªØ§ Ø±Ù†Ø¯Ø± Ù…ÙˆØ¨Ø§ÛŒÙ„ Ø¨Ø§ Ø§ÙØª ÙØ±ÛŒÙ… Ù…ÙˆØ§Ø¬Ù‡ Ù†Ø´ÙˆØ¯.
-- Ø¯Ø± Ø²ÙˆÙ…â€ŒÙ‡Ø§ÛŒ Ø¨Ø§Ù„Ø§ (`zoom >= 11`): Ø³Ø±ÙˆØ± Ù†Ù‚Ø§Ø· Ù…Ù†ÙØ±Ø¯ Ø§Ø³ØªØ§Ù†Ø¯Ø§Ø±Ø¯ GeoJSON Ø±Ø§ Ø§Ø±Ø³Ø§Ù„ Ù…ÛŒâ€ŒÚ©Ù†Ø¯.
-
-**Ù†Ù…ÙˆÙ†Ù‡ ÙØ±Ø§Ø®ÙˆØ§Ù†ÛŒ:**
-```text
-GET /api/v1/map/features?bbox=51.2,35.6,51.9,35.8&zoom=14
-Û². Ø¬Ø³ØªØ¬ÙˆÛŒ Ø´Ø¹Ø§Ø¹ÛŒ Ø§Ø·Ø±Ø§Ù Ú©Ø§Ø±Ø¨Ø± (Nearby Search)
-ÛŒØ§ÙØªÙ† Ù†Ø²Ø¯ÛŒÚ©â€ŒØªØ±ÛŒÙ† Ù†Ù‚Ø§Ø· Ø¨Ù‡ Ù…ÙˆÙ‚Ø¹ÛŒØª Ù…Ú©Ø§Ù†ÛŒ Ø¬Ø§Ø±ÛŒ Ú©Ø§Ø±Ø¨Ø± Ø¨Ø§ Ù…Ø³Ø§ÙØª ÙˆØ§Ù‚Ø¹ÛŒ Ø¨Ø± Ø­Ø³Ø¨ Ù…ØªØ±.
-Ù…Ø³ÛŒØ±: GET /api/v1/map/nearby
-Ù¾Ø§Ø±Ø§Ù…ØªØ±Ù‡Ø§:
-lat: Ø¹Ø±Ø¶ Ø¬ØºØ±Ø§ÙÛŒØ§ÛŒÛŒ Ù†Ù‚Ø·Ù‡ Ù…Ø±Ú©Ø²
-lon: Ø·ÙˆÙ„ Ø¬ØºØ±Ø§ÙÛŒØ§ÛŒÛŒ Ù†Ù‚Ø·Ù‡ Ù…Ø±Ú©Ø²
-radius: Ø´Ø¹Ø§Ø¹ Ø¨Ù‡ Ù…ØªØ± (Ù…Ø«Ù„Ø§Ù‹ 5000 Ø¨Ø±Ø§ÛŒ Ûµ Ú©ÛŒÙ„ÙˆÙ…ØªØ±)
-limit: ØªØ¹Ø¯Ø§Ø¯ Ù†ØªØ§ÛŒØ¬ (Ø­Ø¯Ø§Ú©Ø«Ø± 500)
-Ù†Ù…ÙˆÙ†Ù‡ ÙØ±Ø§Ø®ÙˆØ§Ù†ÛŒ:
-code
-Text
-GET /api/v1/map/nearby?lat=35.7006&lon=51.3381&radius=5000
-Û³. Ø¯Ø±ÛŒØ§ÙØª ØªØ§ÛŒÙ„ ÙˆÚ©ØªÙˆØ± Ø¯Ø§ÛŒÙ†Ø§Ù…ÛŒÚ© (Vector Tiles / MVT)
-Ø¨Ø±Ø§ÛŒ Ú©ØªØ§Ø¨Ø®Ø§Ù†Ù‡â€ŒÙ‡Ø§ÛŒ Ù†Ù‚Ø´Ù‡ Ù…ÙˆØ¨Ø§ÛŒÙ„ Ù…Ø§Ù†Ù†Ø¯ MapLibre GL ÛŒØ§ Mapbox SDK.
-Ù…Ø³ÛŒØ±: GET /api/v1/tiles/{z}/{x}/{y}.mvt
-ÙØ±Ù…Øª Ø®Ø±ÙˆØ¬ÛŒ: application/x-protobuf (Ø¨Ø§ÛŒØªâ€ŒÙ‡Ø§ÛŒ ÙØ´Ø±Ø¯Ù‡ MVT Ø§Ø³ØªØ§Ù†Ø¯Ø§Ø±Ø¯ Mapbox)
-Û´. Ø¢Ø¯Ø±Ø³â€ŒÛŒØ§Ø¨ÛŒ Ù…Ø¹Ú©ÙˆØ³ Ù†Ù‚Ø·Ù‡ (Reverse Geocoding)
-ØªØ¨Ø¯ÛŒÙ„ Ù…Ø®ØªØµØ§Øª Ø¬ØºØ±Ø§ÙÛŒØ§ÛŒÛŒ Ú©Ù„ÛŒÚ©â€ŒØ´Ø¯Ù‡ Ø¨Ù‡ Ù†Ø§Ù… Ù…Ø­Ù„Ù‡ØŒ Ø´Ù‡Ø± Ùˆ Ø§Ø³ØªØ§Ù†.
-Ù…Ø³ÛŒØ±: GET /api/v1/reverse-geocoding
-Ù¾Ø§Ø±Ø§Ù…ØªØ±Ù‡Ø§:
-lat: Ø¹Ø±Ø¶ Ø¬ØºØ±Ø§ÙÛŒØ§ÛŒÛŒ
-lon: Ø·ÙˆÙ„ Ø¬ØºØ±Ø§ÙÛŒØ§ÛŒÛŒ
-Ù†Ù…ÙˆÙ†Ù‡ Ø®Ø±ÙˆØ¬ÛŒ:
-code
-JSON
-{
-  "formatted_address": "Ø§Ø³ØªØ§Ù† ØªÙ‡Ø±Ø§Ù†ØŒ ØªÙ‡Ø±Ø§Ù†ØŒ Ø³Ø¹Ø§Ø¯Øªâ€ŒØ¢Ø¨Ø§Ø¯",
-  "country_code": "IRN",
-  "province": "Ø§Ø³ØªØ§Ù† ØªÙ‡Ø±Ø§Ù†",
-  "city": "ØªÙ‡Ø±Ø§Ù†",
-  "neighborhood": "Ø³Ø¹Ø§Ø¯Øªâ€ŒØ¢Ø¨Ø§Ø¯",
-  "hierarchy": [
-    { "id": "1a564d5c-...", "level": 10, "area_type": "neighborhood", "name": "Ø³Ø¹Ø§Ø¯Øªâ€ŒØ¢Ø¨Ø§Ø¯" },
-    { "id": "6d35f9f1-...", "level": 8,  "area_type": "city",         "name": "ØªÙ‡Ø±Ø§Ù†" },
-    { "id": "fcd130fa-...", "level": 4,  "area_type": "province",     "name": "Ø§Ø³ØªØ§Ù† ØªÙ‡Ø±Ø§Ù†" }
-  ]
-}
-code
-Code
----
-
-### Û´. Ø§Ø¬Ø±Ø§ÛŒ ØªØ³Øªâ€ŒÙ‡Ø§ÛŒ Ù†Ù‡Ø§ÛŒÛŒ Ùˆ ØµØ­Ù‡â€ŒÚ¯Ø°Ø§Ø±ÛŒ Ù¾Ù„ØªÙØ±Ù… (Definition of Done)
-
-Ø¨Ø±Ø§ÛŒ Ø§Ø¬Ø±Ø§ÛŒ ØªÙ…Ø§Ù…ÛŒ ØªØ³Øªâ€ŒÙ‡Ø§ÛŒ Ø®ÙˆØ¯Ú©Ø§Ø± ÛŒÚ©Ù¾Ø§Ø±Ú†Ù‡ Ø±ÙˆÛŒ PostGIS Ø¯Ø³ØªÙˆØ± Ø²ÛŒØ± Ø±Ø§ Ø§Ø¬Ø±Ø§ Ú©Ù†ÛŒØ¯:
-
-```powershell
-cargo test --test integration_test
-ØªÙ…Ø§Ù… Û¶ ØªØ³Øª Ø¨Ø§ Ù…ÙˆÙÙ‚ÛŒØª Ù¾Ø§Ø³ Ø®ÙˆØ§Ù‡Ù†Ø¯ Ø´Ø¯:
-ÙÛŒÙ„ØªØ±ÛŒÙ†Ú¯ Ù…Ø±Ø²ÛŒ Ø§ÛŒÙ†Ø¯Ú©Ø³ GiST
-Ù…Ø±ØªØ¨â€ŒØ³Ø§Ø²ÛŒ Ø¯Ù‚ÛŒÙ‚ ÙÙˆØ§ØµÙ„ Ú˜Ø¦ÙˆØ¯ØªÛŒÚ© Ú©Ø±ÙˆÛŒ
-Ø§Ù„Ú¯ÙˆØ±ÛŒØªÙ… Ø³Ø±ÛŒØ¹ KNN
-Ø®ÙˆØ´Ù‡â€ŒØ¨Ù†Ø¯ÛŒ Ø¯Ø§Ø¯Ù‡â€ŒÙ‡Ø§ÛŒ Ù¾Ø±ØªØ±Ø§Ú©Ù… Ø¯Ø±ÙˆÙ† Ø¯ÛŒØªØ§Ø¨ÛŒØ³
-Ø­Ù„ Ø¢Ø¯Ø±Ø³ Ù…Ø¹Ú©ÙˆØ³ Ø¯Ø± Ú†Ù†Ø¯Ø¶Ù„Ø¹ÛŒâ€ŒÙ‡Ø§ÛŒ Ø§Ø¯Ø§Ø±ÛŒ
-ØªÙˆÙ„ÛŒØ¯ Ø¨Ø§ÛŒÙ†Ø±ÛŒ ØªØ§ÛŒÙ„â€ŒÙ‡Ø§ÛŒ ÙˆÚ©ØªÙˆØ± MVT
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\docs\architecture\MAP_INFRASTRUCTURE.md
-======================================================================
-# Map Infrastructure & Geospatial Platform Architecture
-
-## Û±. ÙÙ„Ø³ÙÙ‡ Ùˆ Ø§ØµÙˆÙ„ Ù…Ø¹Ù…Ø§Ø±ÛŒ
-- **PostgreSQL + PostGIS Ø¨Ù‡ Ø¹Ù†ÙˆØ§Ù† Ù…Ù†Ø¨Ø¹ ÛŒÚ©ØªØ§ÛŒ Ø­Ù‚ÛŒÙ‚Øª (Single Source of Truth):** Ù‡ÛŒÚ† Ø¹Ù…Ù„ÛŒØ§Øª ÙÛŒÙ„ØªØ±ÛŒÙ†Ú¯ ÛŒØ§ Ù¾Ø±Ø¯Ø§Ø²Ø´ Ø³Ù†Ú¯ÛŒÙ† Ù‡Ù†Ø¯Ø³ÛŒ ÙˆØ§Ø±Ø¯ Ø­Ø§ÙØ¸Ù‡ Ø³Ø±ÙˆØ± Ø¨Ø±Ù†Ø§Ù…Ù‡ Ù†Ø´Ø¯Ù‡ Ùˆ ØªÙ…Ø§Ù…Ø§Ù‹ Ø¨Ø§ Ø§ÛŒÙ†Ø¯Ú©Ø³â€ŒÙ‡Ø§ÛŒ ÙØ¶Ø§ÛŒÛŒ `GiST` Ø¯Ø± Ø¯ÛŒØªØ§Ø¨ÛŒØ³ Ø§Ø¬Ø±Ø§ Ù…ÛŒâ€ŒØ´ÙˆØ¯.
-- **ØªÙˆØ³Ø¹Ù‡ Ø¨Ø§ Ø±ÙˆÛŒÚ©Ø±Ø¯ Earned Complexity:** Ø¹Ø¯Ù… Ø§Ø³ØªÙØ§Ø¯Ù‡ Ø§Ø² Ø³Ø±ÙˆÛŒØ³â€ŒÙ‡Ø§ÛŒ Ù¾ÛŒÚ†ÛŒØ¯Ù‡ Ùˆ Ø²ÙˆØ¯Ù‡Ù†Ú¯Ø§Ù… (Ø¨Ø¯ÙˆÙ† KafkaØŒ Elasticsearch ÛŒØ§ Ù…ÛŒÚ©Ø±Ùˆâ€ŒØ³Ø±ÙˆÛŒØ³â€ŒÙ‡Ø§ÛŒ ØªÙˆØ²ÛŒØ¹â€ŒØ´Ø¯Ù‡ ØºÛŒØ±Ø¶Ø±ÙˆØ±ÛŒ).
-- **Ø§Ø³ØªÙ‚Ù„Ø§Ù„ Ú©Ø§Ù…Ù„ Ø§Ø² Ø¯Ø§Ù…Ù†Ù‡ Ú©Ø³Ø¨â€ŒÙˆÚ©Ø§Ø± (Domain Agnostic):** Ù‡Ø³ØªÙ‡ Ù…Ú©Ø§Ù†ÛŒ Ø§Ø·Ù„Ø§Ø¹Ø§Øª ÙØ±ØµØªâ€ŒÙ‡Ø§ÛŒ Ø´ØºÙ„ÛŒ (`Opportunity`) ÛŒØ§ Ø¨ÛŒØ²ÛŒÙ†Ø³ Ø±Ø§ Ù†Ù…ÛŒâ€ŒØ´Ù†Ø§Ø³Ø¯Ø› Ø¨Ù„Ú©Ù‡ ÙÙ‚Ø· Ù…ÙˆØ¬ÙˆØ¯ÛŒØª Ù…Ø³ØªÙ‚Ù„ `Location`ØŒ Ù„Ø§ÛŒÙ‡ Ù†Ù…Ø§ÛŒØ´ÛŒ `MapFeature`ØŒ Ùˆ Ø¨Ø®Ø´â€ŒÙ‡Ø§ÛŒ Ø§Ø¯Ø§Ø±ÛŒ `AdministrativeArea` Ø±Ø§ Ù…Ø¯ÛŒØ±ÛŒØª Ù…ÛŒâ€ŒÚ©Ù†Ø¯.
-
-## Û². Ù‚Ø±Ø§Ø±Ø¯Ø§Ø¯Ù‡Ø§ÛŒ Ø§Ø³ØªØ§Ù†Ø¯Ø§Ø±Ø¯ Ù…Ú©Ø§Ù†ÛŒ (Spatial Conventions)
-- **Ø³ÛŒØ³ØªÙ… Ù…Ø®ØªØµØ§Øª:** `WGS84 / EPSG:4326`
-- **ØªØ±ØªÛŒØ¨ Ù…Ø®ØªØµØ§Øª (RFC 7946):** `[longitude, latitude]`
-- **ÙˆØ§Ø­Ø¯ Ù…Ø³Ø§ÙØª Ùˆ Ø´Ø¹Ø§Ø¹:** Ù…ØªØ± (`meters`) Ø¨Ø§ Ù…Ø­Ø§Ø³Ø¨Ø§Øª Ú©Ø±ÙˆÛŒ Ú˜Ø¦ÙˆØ¯ØªÛŒÚ© PostGIS (`geography`)
-- **ØªØ±ØªÛŒØ¨ Ù…Ø±Ø² Ù…Ø­Ø¯ÙˆØ¯Ù‡ Ù…Ø³ØªØ·ÛŒÙ„ÛŒ:** `[west, south, east, north]`
-- **ÙØ±Ù…Øª ØªØ¨Ø§Ø¯Ù„ Ø¯Ø§Ø¯Ù‡ Ù„Ø§ÛŒÙ‡ Ù†Ù‚Ø´Ù‡:** Ø§Ø³ØªØ§Ù†Ø¯Ø§Ø±Ø¯ GeoJSON (`FeatureCollection`) Ùˆ ØªØ§ÛŒÙ„â€ŒÙ‡Ø§ÛŒ Ø¨Ø§ÛŒÙ†Ø±ÛŒ ÙˆÚ©ØªÙˆØ± (`MVT / Protobuf`)
-
-## Û³. Ø§Ø¬Ø²Ø§ÛŒ CrateÙ‡Ø§ÛŒ Workspace
-| Ù†Ø§Ù… Ú©Ø±ÛŒØª | Ù…Ø³Ø¦ÙˆÙ„ÛŒØª |
-| :--- | :--- |
-| `geo-types` | Ø§Ù†ÙˆØ§Ø¹ Ø¯Ø§Ø¯Ù‡ Ø§ÙˆÙ„ÛŒÙ‡ Ù…Ú©Ø§Ù†ÛŒ (`GeoPoint`ØŒ `BoundingBox`ØŒ `Radius`ØŒ `Distance`) Ùˆ Ø§Ø¹ØªØ¨Ø§Ø±Ø³Ù†Ø¬ÛŒ Ù…Ø®ØªØµØ§Øª |
-| `geo-domain` | Ù…Ø¯Ù„â€ŒÙ‡Ø§ÛŒ Ø¯Ø§Ù…Ù†Ù‡ Ù…Ú©Ø§Ù†ÛŒ Ù…Ø³ØªÙ‚Ù„ Ø§Ø² Ù¾Ø§ÛŒÚ¯Ø§Ù‡ Ø¯Ø§Ø¯Ù‡ (`Location`ØŒ `LocationPrecision`) |
-| `geo-storage` | Ù„Ø§ÛŒÙ‡ Ø§ØªØµØ§Ù„ Ø¨Ù‡ Ø¯ÛŒØªØ§Ø¨ÛŒØ³ØŒ Ø§Ø³ØªÙ‚Ø±Ø§Ø± Ù…Ø§ÛŒÚ¯Ø±ÛŒØ´Ù†â€ŒÙ‡Ø§ÛŒ PostGIS Ùˆ Ø±ÛŒÙ¾Ø§Ø²ÛŒØªÙˆØ±ÛŒ Ù…Ú©Ø§Ù†ÛŒ |
-| `geo-query` | Ù…ÙˆØªÙˆØ± Ø§Ø¬Ø±Ø§ÛŒ Ú©ÙˆØ¦Ø±ÛŒâ€ŒÙ‡Ø§ÛŒ Ù…Ú©Ø§Ù†ÛŒ (BBoxØŒ Ø´Ø¹Ø§Ø¹ Ú˜Ø¦ÙˆØ¯ØªÛŒÚ©ØŒ KNN Ø§ÛŒÙ†Ø¯Ú©Ø³â€ŒÙ…Ø­ÙˆØ±ØŒ Ùˆ Ø®ÙˆØ´Ù‡â€ŒØ¨Ù†Ø¯ÛŒ Ø¯Ø§ÛŒÙ†Ø§Ù…ÛŒÚ©) |
-| `geo-presentation` | Ù…Ø¯Ù„â€ŒÙ‡Ø§ÛŒ Ù„Ø§ÛŒÙ‡ Ù†Ù…Ø§ÛŒØ´ Ù†Ù‚Ø´Ù‡ Ùˆ ØªØ¨Ø¯ÛŒÙ„ Ø¨Ù‡ Ø§Ø³ØªØ§Ù†Ø¯Ø§Ø±Ø¯ GeoJSON Feature Ùˆ Marker DTO |
-| `geo-tiles` | Ø³ÛŒØ³ØªÙ… Ù…Ø®ØªØµØ§Øª ØªØ§ÛŒÙ„ Ø²ÙˆÙ… (Web Mercator) Ùˆ ØªÙˆÙ„ÛŒØ¯ Ø¨Ø§ÛŒÙ†Ø±ÛŒ Vector Tile Ø¨Ø§ ØªØ§Ø¨Ø¹ Ø¨ÙˆÙ…ÛŒ `ST_AsMVT` |
-| `geo-geocoding` | Ú˜Ø¦ÙˆÚ¯Ø±Ø§ÙÛŒ Ø³Ù„Ø³Ù„Ù‡â€ŒÙ…Ø±Ø§ØªØ¨ÛŒ Ø§Ø¯Ø§Ø±ÛŒ Ùˆ Ù…ÙˆØªÙˆØ± Reverse Geocoding Ù…Ø¨ØªÙ†ÛŒ Ø¨Ø± Ø¯Ø±ÙˆÙ†â€ŒÛŒØ§Ø¨ÛŒ Ù†Ù‚Ø·Ù‡ Ø¯Ø± Ú†Ù†Ø¯Ø¶Ù„Ø¹ÛŒ |
-| `map-api` | Ø³Ø±ÙˆÛŒØ³ HTTP Ø¨Ø§ ÙØ±ÛŒÙ…â€ŒÙˆØ±Ú© Axum Ø¨Ø±Ø§ÛŒ Ø§Ø±Ø§Ø¦Ù‡ Ø¯Ø§Ø¯Ù‡ Ø¨Ù‡ Ú©Ù„Ø§ÛŒÙ†Øªâ€ŒÙ‡Ø§ÛŒ ÙˆØ¨ Ùˆ Ù…ÙˆØ¨Ø§ÛŒÙ„ |
-| `geo-importer` | Ø§Ø¨Ø²Ø§Ø± Ø®Ø·â€ŒÙØ±Ù…Ø§Ù† Ø¬Ù‡Øª Ù¾Ø§ÛŒÙ¾â€ŒÙ„Ø§ÛŒÙ† ÙˆØ±ÙˆØ¯ Ø§Ø³ØªØ±ÛŒÙ… Ø¯Ø§Ø¯Ù‡â€ŒÙ‡Ø§ÛŒ Ù†Ù‚Ø´Ù‡ Ùˆ OSM PBF |
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\migrations\20240101000001_init_postgis.sql
-======================================================================
--- Enable PostGIS Extension
-CREATE EXTENSION IF NOT EXISTS postgis;
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Ensure standard Spatial Reference System (EPSG:4326) exists
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM spatial_ref_sys WHERE srid = 4326) THEN
-        RAISE EXCEPTION 'SRID 4326 is missing from spatial_ref_sys';
-    END IF;
-END $$;
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\migrations\20240101000002_create_locations_table.sql
-======================================================================
-CREATE TABLE IF NOT EXISTS locations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    -- EPSG:4326 Point Geometry [longitude, latitude]
-    coordinates geometry(Point, 4326) NOT NULL,
-    address_summary TEXT,
-    precision VARCHAR(32) NOT NULL DEFAULT 'exact',
-    source VARCHAR(64) NOT NULL DEFAULT 'manual',
-    source_id VARCHAR(128),
-    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Spatial GiST Index for 2D Spatial Operations
-CREATE INDEX IF NOT EXISTS idx_locations_coordinates_gist 
-ON locations USING GIST (coordinates);
-
--- B-Tree Index for Data Source Provenance Queries
-CREATE INDEX IF NOT EXISTS idx_locations_source_source_id 
-ON locations (source, source_id);
-
--- Trigger for auto-updating updated_at
-CREATE OR REPLACE FUNCTION trigger_set_timestamp()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE TRIGGER set_locations_updated_at
-BEFORE UPDATE ON locations
-FOR EACH ROW
-EXECUTE FUNCTION trigger_set_timestamp();
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\migrations\20240101000003_create_administrative_areas.sql
-======================================================================
-CREATE TABLE IF NOT EXISTS administrative_areas (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    parent_id UUID REFERENCES administrative_areas(id) ON DELETE SET NULL,
-    country_code VARCHAR(3) NOT NULL, -- ISO-3166-1 alpha-3
-    admin_level INT NOT NULL,         -- 2: Country, 4: Province, 6: County, 8: City, 10: Neighborhood
-    area_type VARCHAR(32) NOT NULL,   -- 'country', 'province', 'county', 'district', 'city', 'neighborhood'
-    name VARCHAR(255) NOT NULL,
-    name_en VARCHAR(255),
-    boundary geometry(MultiPolygon, 4326) NOT NULL,
-    center geometry(Point, 4326),
-    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_admin_areas_boundary_gist 
-ON administrative_areas USING GIST (boundary);
-
-CREATE INDEX IF NOT EXISTS idx_admin_areas_center_gist 
-ON administrative_areas USING GIST (center);
-
-CREATE INDEX IF NOT EXISTS idx_admin_areas_hierarchy 
-ON administrative_areas (country_code, admin_level, parent_id);
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\migrations\20240101000004_add_source_unique_constraint.sql
-======================================================================
--- Formal table-level UNIQUE constraint for idempotent batch inserts and ON CONFLICT inference
-ALTER TABLE locations 
-ADD CONSTRAINT uq_locations_source_source_id UNIQUE (source, source_id);
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\migrations\20240101000005_create_osm_roads.sql
-======================================================================
-CREATE TABLE IF NOT EXISTS osm_roads (
-    id BIGINT PRIMARY KEY,
-    name TEXT,
-    highway VARCHAR(32) NOT NULL,
-    geom geometry(LineString, 4326) NOT NULL,
-    z_order INT NOT NULL DEFAULT 0
-);
-
--- Spatial GiST Index for Fast Vector Tile Clipping
-CREATE INDEX IF NOT EXISTS idx_osm_roads_geom_gist 
-ON osm_roads USING GIST (geom);
-
--- B-Tree Index for Zoom-based Filtering
-CREATE INDEX IF NOT EXISTS idx_osm_roads_highway 
-ON osm_roads (highway);
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\migrations\20240101000006_create_identity_tables.sql
-======================================================================
-CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email VARCHAR(255) NOT NULL,
-    phone VARCHAR(32),
-    password_hash VARCHAR(255) NOT NULL,
-    status VARCHAR(32) NOT NULL DEFAULT 'active',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower 
-ON users (LOWER(email));
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone 
-ON users (phone) 
-WHERE phone IS NOT NULL;
-
-CREATE OR REPLACE TRIGGER set_users_updated_at
-BEFORE UPDATE ON users
-FOR EACH ROW
-EXECUTE FUNCTION trigger_set_timestamp();
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\migrations\20240101000007_create_company_tables.sql
-======================================================================
-CREATE TABLE IF NOT EXISTS companies (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(255) NOT NULL,
-    slug VARCHAR(255) NOT NULL,
-    description TEXT,
-    logo_storage_key VARCHAR(255),
-    website VARCHAR(255),
-    verification_status VARCHAR(32) NOT NULL DEFAULT 'not_started',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_companies_slug_lower 
-ON companies (LOWER(slug));
-
-CREATE TABLE IF NOT EXISTS company_memberships (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role VARCHAR(32) NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT chk_company_membership_role 
-        CHECK (role IN ('owner', 'admin', 'recruiter', 'hiring_manager')),
-    CONSTRAINT uq_company_membership_user 
-        UNIQUE (company_id, user_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_company_memberships_user 
-ON company_memberships (user_id);
-
-CREATE TABLE IF NOT EXISTS company_locations (
-    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-    location_id UUID NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
-    is_headquarters BOOLEAN NOT NULL DEFAULT false,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (company_id, location_id)
-);
-
-CREATE OR REPLACE TRIGGER set_companies_updated_at
-BEFORE UPDATE ON companies
-FOR EACH ROW
-EXECUTE FUNCTION trigger_set_timestamp();
-
-CREATE OR REPLACE TRIGGER set_company_memberships_updated_at
-BEFORE UPDATE ON company_memberships
-FOR EACH ROW
-EXECUTE FUNCTION trigger_set_timestamp();
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\migrations\20240101000008_create_refresh_tokens_table.sql
-======================================================================
-CREATE TABLE IF NOT EXISTS refresh_tokens (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token_hash VARCHAR(64) NOT NULL, -- SHA-256 hash of the random token
-    expires_at TIMESTAMPTZ NOT NULL,
-    revoked_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Unique index on active token hashes
-CREATE UNIQUE INDEX IF NOT EXISTS idx_refresh_tokens_hash 
-ON refresh_tokens (token_hash);
-
--- Fast lookup for user sessions
-CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user 
-ON refresh_tokens (user_id);
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\migrations\20240101000009_create_taxonomy_tables.sql
-======================================================================
--- 1. Categories (For Opportunities classification - Section 24)
-CREATE TABLE IF NOT EXISTS categories (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(100) NOT NULL,
-    slug VARCHAR(100) NOT NULL,
-    description TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_categories_slug_lower ON categories (LOWER(slug));
-
--- 2. Industries (For Company activity classification - Section 25)
-CREATE TABLE IF NOT EXISTS industries (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(100) NOT NULL,
-    slug VARCHAR(100) NOT NULL,
-    description TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_industries_slug_lower ON industries (LOWER(slug));
-
--- 3. Canonical Skills (Section 26)
-CREATE TABLE IF NOT EXISTS skills (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(100) NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_skills_name_lower ON skills (LOWER(name));
-
--- 4. Skill Aliases (Mapping variants to canonical skills - Section 27)
-CREATE TABLE IF NOT EXISTS skill_aliases (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    skill_id UUID NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
-    alias VARCHAR(100) NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_aliases_lower ON skill_aliases (LOWER(alias));
-CREATE INDEX IF NOT EXISTS idx_skill_aliases_skill_id ON skill_aliases (skill_id);
-
--- 5. Occupations (Standardized role concepts - Section 28)
-CREATE TABLE IF NOT EXISTS occupations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(150) NOT NULL,
-    code VARCHAR(50), -- e.g. ISCO-08 code
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_occupations_name_lower ON occupations (LOWER(name));
-
--- Triggers for auto-updating timestamps
-CREATE OR REPLACE TRIGGER set_categories_updated_at
-BEFORE UPDATE ON categories
-FOR EACH ROW
-EXECUTE FUNCTION trigger_set_timestamp();
-
-CREATE OR REPLACE TRIGGER set_industries_updated_at
-BEFORE UPDATE ON industries
-FOR EACH ROW
-EXECUTE FUNCTION trigger_set_timestamp();
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\migrations\20240101000010_create_opportunity_tables.sql
-======================================================================
-CREATE TABLE IF NOT EXISTS opportunities (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-    title VARCHAR(255) NOT NULL,
-    description TEXT NOT NULL,
-    category_id UUID NOT NULL REFERENCES categories(id),
-    occupation_id UUID REFERENCES occupations(id),
-    opportunity_type VARCHAR(32) NOT NULL,
-    workplace_type VARCHAR(32) NOT NULL,
-    remote_scope VARCHAR(32),
-    experience_level VARCHAR(32) NOT NULL,
-    salary_min NUMERIC(15, 2), -- Stored with NUMERIC (Section 8)
-    salary_max NUMERIC(15, 2),
-    salary_currency VARCHAR(3) NOT NULL DEFAULT 'IRR',
-    salary_period VARCHAR(16) NOT NULL DEFAULT 'monthly', -- monthly, hourly, yearly
-    status VARCHAR(32) NOT NULL DEFAULT 'draft',
-    published_at TIMESTAMPTZ,
-    expires_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-    -- Enforce exact frozen Opportunity lifecycle states (Section 15)
-    CONSTRAINT chk_opportunity_status 
-        CHECK (status IN ('draft', 'published', 'paused', 'closed')),
-
-    -- Enforce exact frozen Opportunity types (Section 14)
-    CONSTRAINT chk_opportunity_type 
-        CHECK (opportunity_type IN ('full_time', 'part_time', 'contract', 'internship', 'freelance', 'temporary')),
-
-    -- Enforce Workplace types (Section 17)
-    CONSTRAINT chk_workplace_type 
-        CHECK (workplace_type IN ('onsite', 'hybrid', 'remote')),
-
-    -- Enforce Remote scope (Section 18)
-    CONSTRAINT chk_remote_scope 
-        CHECK (remote_scope IS NULL OR remote_scope IN ('global', 'country', 'region', 'timezone'))
-);
-
-CREATE INDEX IF NOT EXISTS idx_opportunities_company ON opportunities (company_id);
-CREATE INDEX IF NOT EXISTS idx_opportunities_status_expires ON opportunities (status, expires_at);
-CREATE INDEX IF NOT EXISTS idx_opportunities_category ON opportunities (category_id);
-
--- Opportunity Locations Table (One Opportunity may have multiple locations - Section 17)
-CREATE TABLE IF NOT EXISTS opportunity_locations (
-    opportunity_id UUID NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
-    location_id UUID NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
-    PRIMARY KEY (opportunity_id, location_id)
-);
-
--- Opportunity Skills Table (Canonical skills associated with an Opportunity)
-CREATE TABLE IF NOT EXISTS opportunity_skills (
-    opportunity_id UUID NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
-    skill_id UUID NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
-    is_required BOOLEAN NOT NULL DEFAULT true,
-    PRIMARY KEY (opportunity_id, skill_id)
-);
-
--- Trigger for auto-updating updated_at
-CREATE OR REPLACE TRIGGER set_opportunities_updated_at
-BEFORE UPDATE ON opportunities
-FOR EACH ROW
-EXECUTE FUNCTION trigger_set_timestamp();
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\migrations\20240101000011_create_candidate_tables.sql
-======================================================================
--- 1. Candidates Table (Separate profile from User identity - Section 9)
-CREATE TABLE IF NOT EXISTS candidates (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-    first_name VARCHAR(100) NOT NULL,
-    last_name VARCHAR(100) NOT NULL,
-    headline VARCHAR(255),
-    bio TEXT,
-    avatar_storage_key VARCHAR(255),
-    -- Location Privacy: Stored strictly as approximate / preferred (Section 10 & 172)
-    preferred_location_id UUID REFERENCES locations(id) ON DELETE SET NULL,
-    preferred_city VARCHAR(100),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_candidates_user ON candidates (user_id);
-
--- 2. Candidate Skills Table
-CREATE TABLE IF NOT EXISTS candidate_skills (
-    candidate_id UUID NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
-    skill_id UUID NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
-    PRIMARY KEY (candidate_id, skill_id)
-);
-
--- 3. Candidate Experiences Table
-CREATE TABLE IF NOT EXISTS candidate_experiences (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    candidate_id UUID NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
-    title VARCHAR(255) NOT NULL,
-    company_name VARCHAR(255) NOT NULL,
-    start_date DATE NOT NULL,
-    end_date DATE,
-    is_current BOOLEAN NOT NULL DEFAULT false,
-    description TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_candidate_exp_cand ON candidate_experiences (candidate_id);
-
--- 4. Candidate Educations Table
-CREATE TABLE IF NOT EXISTS candidate_educations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    candidate_id UUID NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
-    institution VARCHAR(255) NOT NULL,
-    degree VARCHAR(100),
-    field_of_study VARCHAR(150),
-    start_date DATE NOT NULL,
-    end_date DATE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_candidate_edu_cand ON candidate_educations (candidate_id);
-
--- 5. Candidate Resumes Table (Private files - Section 52 & 103)
-CREATE TABLE IF NOT EXISTS candidate_resumes (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    candidate_id UUID NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
-    storage_key VARCHAR(255) NOT NULL,
-    filename VARCHAR(255) NOT NULL,
-    mime_type VARCHAR(64) NOT NULL,
-    file_size BIGINT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_candidate_res_cand ON candidate_resumes (candidate_id);
-
--- Trigger for auto-updating candidates updated_at
-CREATE OR REPLACE TRIGGER set_candidates_updated_at
-BEFORE UPDATE ON candidates
-FOR EACH ROW
-EXECUTE FUNCTION trigger_set_timestamp();
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\migrations\20240101000012_create_application_tables.sql
-======================================================================
-CREATE TABLE IF NOT EXISTS applications (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    candidate_id UUID NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
-    opportunity_id UUID NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
-    resume_id UUID REFERENCES candidate_resumes(id) ON DELETE SET NULL,
-    cover_letter TEXT,
-    status VARCHAR(32) NOT NULL DEFAULT 'submitted',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-    -- Enforce exact frozen Application lifecycle states (Section 20)
-    CONSTRAINT chk_application_status 
-        CHECK (status IN ('submitted', 'reviewing', 'interview', 'accepted', 'rejected')),
-
-    -- Duplicate Prevention Rule: Candidate MUST NOT submit duplicate applications (Section 22)
-    CONSTRAINT uq_candidate_opportunity 
-        UNIQUE (candidate_id, opportunity_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_applications_candidate ON applications (candidate_id);
-CREATE INDEX IF NOT EXISTS idx_applications_opportunity ON applications (opportunity_id);
-
--- Trigger for auto-updating updated_at
-CREATE OR REPLACE TRIGGER set_applications_updated_at
-BEFORE UPDATE ON applications
-FOR EACH ROW
-EXECUTE FUNCTION trigger_set_timestamp();
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\migrations\20240101000013_create_search_indexes.sql
-======================================================================
--- Full-Text Search column on Title (weight A) and Description (weight B)
-ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS search_vector tsvector
-GENERATED ALWAYS AS (
-    setweight(to_tsvector('simple', coalesce(title, '')), 'A') ||
-    setweight(to_tsvector('simple', coalesce(description, '')), 'B')
-) STORED;
-
--- GIN Index for sub-millisecond Full-Text Search
-CREATE INDEX IF NOT EXISTS idx_opportunities_search_vector_gin 
-ON opportunities USING GIN (search_vector);
-
--- Compound Index for public discovery visibility and cursor pagination
-CREATE INDEX IF NOT EXISTS idx_opportunities_discovery 
-ON opportunities (status, published_at DESC, id DESC) 
-WHERE status = 'published';
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\migrations\20240101000014_create_saved_and_preference_tables.sql
-======================================================================
--- 1. Saved Opportunities Table (Independent entity - Section 46)
-CREATE TABLE IF NOT EXISTS saved_opportunities (
-    candidate_id UUID NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
-    opportunity_id UUID NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (candidate_id, opportunity_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_saved_opps_cand ON saved_opportunities (candidate_id);
-
--- 2. Saved Companies Table (Independent entity - Section 47)
-CREATE TABLE IF NOT EXISTS saved_companies (
-    candidate_id UUID NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
-    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (candidate_id, company_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_saved_comps_cand ON saved_companies (candidate_id);
-
--- 3. Saved Searches Table (Discovery criteria, NOT transient map state - Section 48)
-CREATE TABLE IF NOT EXISTS saved_searches (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    candidate_id UUID NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
-    title VARCHAR(150) NOT NULL,
-    criteria JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_saved_searches_cand ON saved_searches (candidate_id);
-
--- 4. Candidate Preferences Table (Independent from search - Section 49)
-CREATE TABLE IF NOT EXISTS candidate_preferences (
-    candidate_id UUID PRIMARY KEY REFERENCES candidates(id) ON DELETE CASCADE,
-    preferred_workplace_types VARCHAR(32)[] NOT NULL DEFAULT '{}',
-    preferred_opportunity_types VARCHAR(32)[] NOT NULL DEFAULT '{}',
-    expected_salary_min NUMERIC(15, 2),
-    salary_currency VARCHAR(3) NOT NULL DEFAULT 'IRR',
-    remote_only BOOLEAN NOT NULL DEFAULT false,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Trigger for candidate preferences timestamp
-CREATE OR REPLACE TRIGGER set_candidate_preferences_updated_at
-BEFORE UPDATE ON candidate_preferences
-FOR EACH ROW
-EXECUTE FUNCTION trigger_set_timestamp();
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\migrations\20240101000015_create_governance_tables.sql
-======================================================================
--- 1. Platform Admin Users (Section 46, 62 & 109: Separate from CompanyMembership)
-CREATE TABLE IF NOT EXISTS admin_users (
-    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    role VARCHAR(32) NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT chk_admin_role CHECK (role IN ('admin', 'moderator', 'support'))
-);
-
--- 2. Company Verifications Table (Section 43 & 55)
-CREATE TABLE IF NOT EXISTS company_verifications (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-    status VARCHAR(32) NOT NULL DEFAULT 'not_started',
-    evidence_storage_keys TEXT[] NOT NULL DEFAULT '{}', -- S3 storage keys for private evidence
-    reviewer_id UUID REFERENCES users(id),
-    review_notes TEXT,
-    submitted_at TIMESTAMPTZ,
-    reviewed_at TIMESTAMPTZ,
-    expires_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT chk_verification_status 
-        CHECK (status IN ('not_started', 'pending', 'under_review', 'verified', 'rejected', 'expired'))
-);
-
-CREATE INDEX IF NOT EXISTS idx_verifications_company ON company_verifications (company_id);
-
--- 3. Reports Table (Allegation - Section 44 & 58)
-CREATE TABLE IF NOT EXISTS reports (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    reporter_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-    opportunity_id UUID NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
-    reason VARCHAR(100) NOT NULL,
-    details TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_reports_opp ON reports (opportunity_id);
-
--- 4. Moderation Cases Table (Actual Review Process - Section 44 & 59)
-CREATE TABLE IF NOT EXISTS moderation_cases (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    opportunity_id UUID NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
-    status VARCHAR(32) NOT NULL DEFAULT 'open', -- open, in_review, resolved, dismissed
-    assigned_moderator_id UUID REFERENCES users(id),
-    action_taken VARCHAR(64) NOT NULL DEFAULT 'none', -- none, suspended, approved
-    internal_notes TEXT, -- Staff-only private notes (Section 48 & 169)
-    resolved_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT chk_moderation_status CHECK (status IN ('open', 'in_review', 'resolved', 'dismissed'))
-);
-
-CREATE INDEX IF NOT EXISTS idx_mod_cases_opp ON moderation_cases (opportunity_id);
-
--- 5. Audit Log Table (Immutable & Append-Only - Section 47, 63 & 114)
-CREATE TABLE IF NOT EXISTS audit_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    actor_id UUID REFERENCES users(id) ON DELETE SET NULL,
-    action VARCHAR(100) NOT NULL,
-    resource_type VARCHAR(64) NOT NULL,
-    resource_id UUID NOT NULL,
-    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_audit_logs_resource ON audit_logs (resource_type, resource_id);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs (actor_id);
-
-
-
-======================================================================
-FILE: C:\Users\Raven\geo-job\web\index.html
-======================================================================
-<!DOCTYPE html>
-<html lang="fa" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ù…ÛŒØ² Ú©Ø§Ø± ØªØ³Øª Ù¾Ù„ØªÙØ±Ù… Ù…Ú©Ø§Ù†ÛŒ (Rust + PostGIS)</title>
-    
-    <!-- MapLibre GL JS -->
-    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
-    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
-
-    <style>
-        body { margin: 0; padding: 0; font-family: Tahoma, sans-serif; background: #0f172a; }
-        #map { width: 100vw; height: 100vh; }
-        
-        /* Ù¾Ù†Ù„ Ø§Ø¨Ø²Ø§Ø± ØªØ³Øª */
-        .workbench {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            z-index: 10;
-            background: white;
-            padding: 16px;
-            border-radius: 10px;
-            box-shadow: 0 4px 25px rgba(0,0,0,0.2);
-            width: 330px;
-            max-height: 92vh;
-            overflow-y: auto;
-            font-size: 13px;
-            line-height: 1.6;
-            border: 1px solid #cbd5e1;
-        }
-        .tab-bar {
-            display: flex;
-            gap: 4px;
-            flex-wrap: wrap;
-            margin-bottom: 12px;
-        }
-        .tab-btn {
-            background: #f1f5f9;
-            border: 1px solid #cbd5e1;
-            padding: 6px 10px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 11px;
-            font-family: inherit;
-        }
-        .tab-btn.active {
-            background: #2563eb;
-            color: white;
-            border-color: #2563eb;
-            font-weight: bold;
-        }
-        .tab-content {
-            display: none;
-            border-top: 1px solid #e2e8f0;
-            padding-top: 10px;
-        }
-        .tab-content.active { display: block; }
-        .btn-action {
-            background: #2563eb;
-            color: white;
-            border: none;
-            padding: 8px 12px;
-            border-radius: 6px;
-            cursor: pointer;
-            width: 100%;
-            font-weight: bold;
-            font-family: inherit;
-            margin-top: 8px;
-        }
-        .btn-action:hover { background: #1d4ed8; }
-        input, select {
-            width: 100%;
-            padding: 8px;
-            margin-top: 4px;
-            border: 1px solid #cbd5e1;
-            border-radius: 6px;
-            box-sizing: border-box;
-            font-family: inherit;
-            font-size: 12px;
-        }
-        .badge-health {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: bold;
-        }
-        .health-ok { background: #dcfce7; color: #15803d; }
-        .health-err { background: #fee2e2; color: #b91c1c; }
-        .result-box {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            padding: 10px;
-            border-radius: 6px;
-            margin-top: 8px;
-            font-size: 12px;
-            word-break: break-word;
-        }
-    </style>
-</head>
-<body>
-
-    <div class="workbench">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <h3 style="margin: 0; color: #0f172a; font-size: 14px;">Geospatial Platform</h3>
-            <span id="health-badge" class="badge-health health-ok">Ø³Ø±ÙˆØ± ÙØ¹Ø§Ù„</span>
-        </div>
-
-        <div class="tab-bar">
-            <button class="tab-btn active" onclick="setTab('reverse')">Ø¢Ø¯Ø±Ø³ Ù…Ø¹Ú©ÙˆØ³</button>
-            <button class="tab-btn" onclick="setTab('nearby')">Ø¬Ø³ØªØ¬ÙˆÛŒ Ø´Ø¹Ø§Ø¹ÛŒ</button>
-            <button class="tab-btn" onclick="setTab('create')">Ø«Ø¨Øª Ø¢Ú¯Ù‡ÛŒ Ú©Ø§Ø±ÙØ±Ù…Ø§</button>
-            <button class="tab-btn" onclick="setTab('viewport')">Ø¯ÛŒØ¯Ú¯Ø§Ù‡ Ù†Ù‚Ø´Ù‡</button>
-        </div>
-
-        <!-- ØªØ¨ Û±: Ø¢Ø¯Ø±Ø³â€ŒÛŒØ§Ø¨ÛŒ Ù…Ø¹Ú©ÙˆØ³ -->
-        <div id="panel-reverse" class="tab-content active">
-            <b>Ø¢Ø¯Ø±Ø³â€ŒÛŒØ§Ø¨ÛŒ Ù…Ø¹Ú©ÙˆØ³ (Reverse Geocoding):</b>
-            <div style="color: #64748b; font-size: 11px;">Ø±ÙˆÛŒ Ù‡Ø± Ú©Ø¬Ø§ÛŒ Ù†Ù‚Ø´Ù‡ Ú©Ù„ÛŒÚ© Ú©Ù†ÛŒØ¯ ØªØ§ Ø¢Ø¯Ø±Ø³ Ù…Ø­Ù„Ù‡ Ùˆ Ø´Ù‡Ø± Ø§Ø³ØªØ®Ø±Ø§Ø¬ Ø´ÙˆØ¯.</div>
-            <div id="reverse-output" class="result-box">Ø±ÙˆÛŒ Ù†Ù‚Ø´Ù‡ Ú©Ù„ÛŒÚ© Ú©Ù†ÛŒØ¯...</div>
-        </div>
-
-        <!-- ØªØ¨ Û²: Ø¬Ø³ØªØ¬ÙˆÛŒ Ø´Ø¹Ø§Ø¹ÛŒ -->
-        <div id="panel-nearby" class="tab-content">
-            <b>Ø¬Ø³ØªØ¬ÙˆÛŒ Ø´Ø¹Ø§Ø¹ÛŒ (Nearby Search):</b>
-            <label style="font-size: 11px; color: #475569;">Ø´Ø¹Ø§Ø¹ Ø¬Ø³ØªØ¬Ùˆ Ø¨Ù‡ Ù…ØªØ±:</label>
-            <input type="number" id="radius-input" value="3000" step="500" min="500" max="25000" />
-            <div style="color: #64748b; font-size: 11px; margin-top: 4px;">Ø±ÙˆÛŒ Ù†Ù‚Ø´Ù‡ Ú©Ù„ÛŒÚ© Ú©Ù†ÛŒØ¯ ØªØ§ Ù…Ø±Ú©Ø² Ø´Ø¹Ø§Ø¹ Ù…Ø´Ø®Øµ Ø´Ø¯Ù‡ Ùˆ Ø¬Ø³ØªØ¬Ùˆ Ø§Ù†Ø¬Ø§Ù… Ø´ÙˆØ¯.</div>
-            <div id="nearby-output" class="result-box">Ù…Ø±Ú©Ø² Ø´Ø¹Ø§Ø¹ Ø±Ø§ Ù…Ø´Ø®Øµ Ú©Ù†ÛŒØ¯...</div>
-        </div>
-
-        <!-- ØªØ¨ Û³: Ø«Ø¨Øª Ù…ÙˆÙ‚Ø¹ÛŒØª Ú©Ø§Ø±ÙØ±Ù…Ø§ -->
-        <div id="panel-create" class="tab-content">
-            <b>Ø«Ø¨Øª ÙØ±ØµØª Ø´ØºÙ„ÛŒ Ú©Ø§Ø±ÙØ±Ù…Ø§ (API):</b>
-            <label style="font-size: 11px; color: #475569;">Ø¹Ù†ÙˆØ§Ù† ÙØ±ØµØª Ø´ØºÙ„ÛŒ:</label>
-            <input type="text" id="job-title" placeholder="Ù…Ø«Ø§Ù„: Ù…Ù‡Ù†Ø¯Ø³ Ø§Ø±Ø´Ø¯ Rust - Ø¯ÛŒØ¬ÛŒâ€ŒÚ©Ø§Ù„Ø§" />
-            <label style="font-size: 11px; color: #475569; margin-top: 6px; display: block;">Ù…Ø®ØªØµØ§Øª:</label>
-            <input type="text" id="job-coords" readonly placeholder="Ø¨Ø±Ø§ÛŒ Ø§Ù†ØªØ®Ø§Ø¨ Ù…Ø®ØªØµØ§ØªØŒ Ø±ÙˆÛŒ Ù†Ù‚Ø´Ù‡ Ú©Ù„ÛŒÚ© Ú©Ù†ÛŒØ¯" />
-            <button class="btn-action" onclick="submitOpportunity()">Ø«Ø¨Øª Ø¯Ø± PostGIS</button>
-            <div id="create-output" class="result-box" style="display: none;"></div>
-        </div>
-
-        <!-- ØªØ¨ Û´: Ø¯ÛŒØ¯Ú¯Ø§Ù‡ Ù†Ù‚Ø´Ù‡ -->
-        <div id="panel-viewport" class="tab-content">
-            <b>Ø¬Ø³ØªØ¬ÙˆÛŒ Ø¯ÛŒØ¯Ú¯Ø§Ù‡ (Viewport Features):</b>
-            <div style="color: #64748b; font-size: 11px;">Ø¨Ø§ Ù‡Ø± Ø­Ø±Ú©Øª Ù†Ù‚Ø´Ù‡ØŒ ÙØ±ØµØªâ€ŒÙ‡Ø§ÛŒ Ù‡Ù…Ø§Ù† Ú©Ø§Ø¯Ø± Ù„ÙˆØ¯ Ù…ÛŒâ€ŒØ´ÙˆÙ†Ø¯.</div>
-            <button class="btn-action" onclick="fetchViewportOpportunities()" style="background: #475569;">Ø¨Ø±ÙˆØ²Ø±Ø³Ø§Ù†ÛŒ Ù…Ø­Ø¯ÙˆØ¯Ù‡</button>
-            <div id="viewport-output" class="result-box" style="color: #2563eb; font-weight: bold;">ØªØ¹Ø¯Ø§Ø¯ Ù…Ø§Ø±Ú©Ø±Ù‡Ø§ÛŒ Ú©Ø§Ø±ÙØ±Ù…Ø§ÛŒØ§Ù†: 0</div>
-        </div>
-    </div>
-
-    <div id="map"></div>
-
-    <script>
-        const API_BASE = "http://localhost:8080";
-        let activeTab = 'reverse';
-        let selectedCoords = null;
-
-        // Ù¾Ù„Ø§Ú¯ÛŒÙ† Ø±Ø§Ø³Øªâ€ŒØ¨Ù‡â€ŒÚ†Ù¾ Ø¨Ø±Ø§ÛŒ Ø²Ø¨Ø§Ù† ÙØ§Ø±Ø³ÛŒ
-        if (maplibregl.getRTLTextPluginStatus() === 'unavailable') {
-            maplibregl.setRTLTextPlugin(
-                'https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.min.js',
-                null,
-                true
-            );
-        }
-
-        // Ù†Ù‚Ø´Ù‡ Ø¨Ø±Ø¯Ø§Ø±ÛŒ Ø¨Ø§ Ú©Ù†ØªØ±Ø§Ø³Øª Ø¨Ø§Ù„Ø§ Ùˆ Ù…ØªÙ…Ø§ÛŒØ² (High-Contrast Light Theme)
-        const map = new maplibregl.Map({
-            container: 'map',
-            center: [51.39, 35.72],
-            zoom: 13,
-            minZoom: 4,
-            maxZoom: 18,
-            localFontFamily: 'Tahoma, "Segoe UI", Arial, sans-serif',
-            style: {
-                version: 8,
-                glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
-                sources: {
-                    'base_tiles': {
-                        type: 'vector',
-                        tiles: [`${API_BASE}/api/v1/base-tiles/{z}/{x}/{y}.mvt`],
-                        minzoom: 4,
-                        maxzoom: 18
-                    },
-                    'opportunities': {
-                        type: 'geojson',
-                        data: { type: 'FeatureCollection', features: [] }
-                    },
-                    'nearby_circle': {
-                        type: 'geojson',
-                        data: { type: 'FeatureCollection', features: [] }
-                    }
-                },
-                layers: [
-                    // Û±. Ø±Ù†Ú¯ Ù¾Ø³â€ŒØ²Ù…ÛŒÙ†Ù‡ Ø´Ù‡Ø±ÛŒ Ù…Ù„Ø§ÛŒÙ…
-                    {
-                        id: 'background',
-                        type: 'background',
-                        paint: { 'background-color': '#e2e8f0' }
-                    },
-                    // Û². Ø¯Ø§ÛŒØ±Ù‡ Ù…Ø­Ø¯ÙˆØ¯Ù‡ Ø¬Ø³ØªØ¬ÙˆÛŒ Ø´Ø¹Ø§Ø¹ÛŒ
-                    {
-                        id: 'nearby_circle_fill',
-                        type: 'fill',
-                        source: 'nearby_circle',
-                        paint: {
-                            'fill-color': '#38bdf8',
-                            'fill-opacity': 0.25
-                        }
-                    },
-                    {
-                        id: 'nearby_circle_line',
-                        type: 'line',
-                        source: 'nearby_circle',
-                        paint: {
-                            'line-color': '#0284c7',
-                            'line-width': 2,
-                            'line-dasharray': [3, 3]
-                        }
-                    },
-                    // Û³. Ø®ÛŒØ§Ø¨Ø§Ù†â€ŒÙ‡Ø§ÛŒ ÙØ±Ø¹ÛŒ Ùˆ Ú©ÙˆÚ†Ù‡â€ŒÙ‡Ø§ (Ú©Ù†ØªØ±Ø§Ø³Øª Ø³ÙÛŒØ¯ Ø®Ø§Ù„Øµ Ø¨Ø§ Ø­Ø§Ø´ÛŒÙ‡ ØªÛŒØ±Ù‡ Ù…Ø´Ø®Øµ)
-                    {
-                        id: 'roads_minor_casing',
-                        type: 'line',
-                        source: 'base_tiles',
-                        'source-layer': 'roads',
-                        filter: ['!in', 'highway', 'motorway', 'trunk', 'primary', 'secondary'],
-                        layout: { 'line-cap': 'round', 'line-join': 'round' },
-                        paint: {
-                            'line-color': '#94a3b8',
-                            'line-width': 3.0
-                        }
-                    },
-                    {
-                        id: 'roads_minor',
-                        type: 'line',
-                        source: 'base_tiles',
-                        'source-layer': 'roads',
-                        filter: ['!in', 'highway', 'motorway', 'trunk', 'primary', 'secondary'],
-                        layout: { 'line-cap': 'round', 'line-join': 'round' },
-                        paint: {
-                            'line-color': '#ffffff',
-                            'line-width': 2.0
-                        }
-                    },
-                    // Û´. Ø®ÛŒØ§Ø¨Ø§Ù†â€ŒÙ‡Ø§ÛŒ Ø§ØµÙ„ÛŒ Ùˆ Ø´Ø±ÛŒØ§Ù†ÛŒ (Ø±Ù†Ú¯ Ø²Ø±Ø¯ Ø·Ù„Ø§ÛŒÛŒ Ø¨Ø±Ø¬Ø³ØªÙ‡)
-                    {
-                        id: 'roads_primary_casing',
-                        type: 'line',
-                        source: 'base_tiles',
-                        'source-layer': 'roads',
-                        filter: ['in', 'highway', 'primary', 'secondary', 'primary_link'],
-                        layout: { 'line-cap': 'round', 'line-join': 'round' },
-                        paint: {
-                            'line-color': '#ca8a04',
-                            'line-width': 5.5
-                        }
-                    },
-                    {
-                        id: 'roads_primary',
-                        type: 'line',
-                        source: 'base_tiles',
-                        'source-layer': 'roads',
-                        filter: ['in', 'highway', 'primary', 'secondary', 'primary_link'],
-                        layout: { 'line-cap': 'round', 'line-join': 'round' },
-                        paint: {
-                            'line-color': '#fde047',
-                            'line-width': 4.0
-                        }
-                    },
-                    // Ûµ. Ø¨Ø²Ø±Ú¯Ø±Ø§Ù‡â€ŒÙ‡Ø§ Ùˆ Ø¢Ø²Ø§Ø¯Ø±Ø§Ù‡â€ŒÙ‡Ø§ (Ø±Ù†Ú¯ Ù†Ø§Ø±Ù†Ø¬ÛŒ ØªÙ†Ø¯ Ùˆ Ú†Ø´Ù…â€ŒÙ†ÙˆØ§Ø²)
-                    {
-                        id: 'roads_motorway_casing',
-                        type: 'line',
-                        source: 'base_tiles',
-                        'source-layer': 'roads',
-                        filter: ['in', 'highway', 'motorway', 'trunk', 'motorway_link', 'trunk_link'],
-                        layout: { 'line-cap': 'round', 'line-join': 'round' },
-                        paint: {
-                            'line-color': '#9a3412',
-                            'line-width': 7.5
-                        }
-                    },
-                    {
-                        id: 'roads_motorway',
-                        type: 'line',
-                        source: 'base_tiles',
-                        'source-layer': 'roads',
-                        filter: ['in', 'highway', 'motorway', 'trunk', 'motorway_link', 'trunk_link'],
-                        layout: { 'line-cap': 'round', 'line-join': 'round' },
-                        paint: {
-                            'line-color': '#ea580c',
-                            'line-width': 5.5
-                        }
-                    },
-                    // Û¶. Ù†Ø§Ù… Ú©Ø§Ù…Ù„ ÙØ§Ø±Ø³ÛŒ Ù…Ø¹Ø§Ø¨Ø± Ø¨Ø§ Ø­Ø§Ø´ÛŒÙ‡ Ø³ÙÛŒØ¯ Ø¨ÙˆÙ„Ø¯
-                    {
-                        id: 'roads_labels',
-                        type: 'symbol',
-                        source: 'base_tiles',
-                        'source-layer': 'roads',
-                        filter: ['has', 'name'],
-                        layout: {
-                            'symbol-placement': 'line',
-                            'text-field': ['get', 'name'],
-                            'text-size': 12,
-                            'text-font': ['Noto Sans Regular'],
-                            'text-max-angle': 40,
-                            'symbol-spacing': 250
-                        },
-                        paint: {
-                            'text-color': '#0f172a',
-                            'text-halo-color': '#ffffff',
-                            'text-halo-width': 3.0
-                        }
-                    },
-                    // Û·. Ù…Ø§Ø±Ú©Ø±Ù‡Ø§ÛŒ ÙˆØ§Ù‚Ø¹ÛŒ ÙØ±ØµØªâ€ŒÙ‡Ø§ÛŒ Ø´ØºÙ„ÛŒ Ú©Ø§Ø±ÙØ±Ù…Ø§ÛŒØ§Ù†
-                    {
-                        id: 'employer_markers',
-                        type: 'circle',
-                        source: 'opportunities',
-                        paint: {
-                            'circle-radius': 9,
-                            'circle-color': '#dc2626',
-                            'circle-stroke-width': 2.5,
-                            'circle-stroke-color': '#ffffff'
-                        }
-                    }
-                ]
-            }
-        });
-
-        // ØªØºÛŒÛŒØ± ØªØ¨â€ŒÙ‡Ø§
-        function setTab(tabId) {
-            activeTab = tabId;
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            event.target.classList.add('active');
-            document.getElementById(`panel-${tabId}`).classList.add('active');
-        }
-
-        // Ø¨Ø±Ø±Ø³ÛŒ Ø³Ù„Ø§Ù…Øª Ø³Ø±ÙˆØ±
-        async function checkHealth() {
-            try {
-                const res = await fetch(`${API_BASE}/healthz`);
-                const badge = document.getElementById('health-badge');
-                if (res.ok) {
-                    badge.innerText = 'Ø³Ø±ÙˆØ± Ù…ØªØµÙ„ Ø§Ø³Øª';
-                    badge.className = 'badge-health health-ok';
-                } else {
-                    badge.innerText = 'Ø®Ø·Ø§ÛŒ Ø§ØªØµØ§Ù„';
-                    badge.className = 'badge-health health-err';
-                }
-            } catch (e) {
-                const badge = document.getElementById('health-badge');
-                badge.innerText = 'Ø³Ø±ÙˆØ± Ø®Ø§Ù…ÙˆØ´ Ø§Ø³Øª';
-                badge.className = 'badge-health health-err';
-            }
-        }
-        setInterval(checkHealth, 8000);
-        checkHealth();
-
-        // Ù…Ø¯ÛŒØ±ÛŒØª Ø±ÙˆÛŒØ¯Ø§Ø¯ Ú©Ù„ÛŒÚ© Ø±ÙˆÛŒ Ù†Ù‚Ø´Ù‡ Ù…ØªÙ†Ø§Ø³Ø¨ Ø¨Ø§ ØªØ¨ ÙØ¹Ø§Ù„
-        map.on('click', async (e) => {
-            const { lng, lat } = e.lngLat;
-            selectedCoords = [lng, lat];
-
-            if (activeTab === 'reverse') {
-                document.getElementById('reverse-output').innerText = 'Ø¯Ø± Ø­Ø§Ù„ Ø§Ø³ØªØ®Ø±Ø§Ø¬ Ø¢Ø¯Ø±Ø³...';
-                try {
-                    const res = await fetch(`${API_BASE}/api/v1/reverse-geocoding?lat=${lat}&lon=${lng}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        document.getElementById('reverse-output').innerHTML = `
-                            <b>Ø¢Ø¯Ø±Ø³ Ø§Ø³ØªØ®Ø±Ø§Ø¬â€ŒØ´Ø¯Ù‡:</b><br>${data.formatted_address}<br>
-                            <small>Ø§Ø³ØªØ§Ù†: ${data.province || '-'} | Ø´Ù‡Ø±: ${data.city || '-'} | Ù…Ø­Ù„Ù‡: ${data.neighborhood || '-'}</small>
-                        `;
-                        new maplibregl.Popup().setLngLat([lng, lat]).setHTML(`<b>${data.formatted_address}</b>`).addTo(map);
-                    } else {
-                        document.getElementById('reverse-output').innerText = 'Ø§ÛŒÙ† Ù†Ù‚Ø·Ù‡ Ø¯Ø±ÙˆÙ† Ù…Ø±Ø² Ø§Ø¯Ø§Ø±ÛŒ Ø«Ø¨Øªâ€ŒØ´Ø¯Ù‡â€ŒØ§ÛŒ Ù†ÛŒØ³Øª.';
-                    }
-                } catch (err) {
-                    document.getElementById('reverse-output').innerText = 'Ø®Ø·Ø§ Ø¯Ø± Ø§Ø±ØªØ¨Ø§Ø· Ø¨Ø§ Ø³Ø±ÙˆØ±';
-                }
-            } else if (activeTab === 'nearby') {
-                const radius = parseInt(document.getElementById('radius-input').value, 10);
-                drawNearbyCircle(lng, lat, radius);
-                document.getElementById('nearby-output').innerText = 'Ø¯Ø± Ø­Ø§Ù„ Ø¬Ø³ØªØ¬ÙˆÛŒ ÙØ±ØµØªâ€ŒÙ‡Ø§ÛŒ Ù†Ø²Ø¯ÛŒÚ©...';
-                try {
-                    const res = await fetch(`${API_BASE}/api/v1/map/nearby?lat=${lat}&lon=${lng}&radius=${radius}`);
-                    if (res.ok) {
-                        const geojson = await res.json();
-                        const count = geojson.features ? geojson.features.length : 0;
-                        document.getElementById('nearby-output').innerHTML = `<b>ØªØ¹Ø¯Ø§Ø¯ ÙØ±ØµØªâ€ŒÙ‡Ø§ÛŒ ÛŒØ§ÙØªâ€ŒØ´Ø¯Ù‡:</b> ${count} Ù…ÙˆØ±Ø¯`;
-                    }
-                } catch (err) {
-                    document.getElementById('nearby-output').innerText = 'Ø®Ø·Ø§ Ø¯Ø± Ø³Ø±ÙˆØ±';
-                }
-            } else if (activeTab === 'create') {
-                document.getElementById('job-coords').value = `${lng.toFixed(6)}, ${lat.toFixed(6)}`;
-            }
-        });
-
-        // Ø±Ø³Ù… Ø¯Ø§ÛŒØ±Ù‡ Ø´Ø¹Ø§Ø¹ÛŒ Ø¨Ø± Ø±ÙˆÛŒ Ù†Ù‚Ø´Ù‡
-        function drawNearbyCircle(lng, lat, radiusInMeters) {
-            const points = 64;
-            const km = radiusInMeters / 1000;
-            const coords = [];
-            const distanceX = km / (111.320 * Math.cos(lat * Math.PI / 180));
-            const distanceY = km / 110.574;
-
-            for (let i = 0; i < points; i++) {
-                const theta = (i / points) * (2 * Math.PI);
-                const x = distanceX * Math.cos(theta);
-                const y = distanceY * Math.sin(theta);
-                coords.push([lng + x, lat + y]);
-            }
-            coords.push(coords[0]);
-
-            map.getSource('nearby_circle').setData({
-                type: 'FeatureCollection',
-                features: [{
-                    type: 'Feature',
-                    geometry: { type: 'Polygon', coordinates: [coords] }
-                }]
-            });
-        }
-
-        // Ø«Ø¨Øª ÙØ±ØµØª Ø´ØºÙ„ÛŒ Ø¬Ø¯ÛŒØ¯ ØªÙˆØ³Ø· Ú©Ø§Ø±ÙØ±Ù…Ø§ Ø§Ø² Ø·Ø±ÛŒÙ‚ POST /api/v1/locations
-        async function submitOpportunity() {
-            const title = document.getElementById('job-title').value.trim();
-            if (!title) return alert('Ù„Ø·ÙØ§Ù‹ Ø¹Ù†ÙˆØ§Ù† ÙØ±ØµØª Ø´ØºÙ„ÛŒ Ø±Ø§ ÙˆØ§Ø±Ø¯ Ú©Ù†ÛŒØ¯.');
-            if (!selectedCoords) return alert('Ù„Ø·ÙØ§Ù‹ Ø§Ø¨ØªØ¯Ø§ Ø±ÙˆÛŒ Ù†Ù‚Ø´Ù‡ Ú©Ù„ÛŒÚ© Ú©Ù†ÛŒØ¯ ØªØ§ Ù…Ø®ØªØµØ§Øª Ø§Ù†ØªØ®Ø§Ø¨ Ø´ÙˆØ¯.');
-
-            const payload = {
-                longitude: selectedCoords[0],
-                latitude: selectedCoords[1],
-                address_summary: title,
-                precision: "exact",
-                source: "opportunity"
-            };
-
-            const out = document.getElementById('create-output');
-            out.style.display = 'block';
-            out.innerText = 'Ø¯Ø± Ø­Ø§Ù„ Ø«Ø¨Øª Ø¯Ø± PostGIS...';
-
-            try {
-                const res = await fetch(`${API_BASE}/api/v1/locations`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (res.ok) {
-                    const data = await res.json();
-                    out.innerHTML = `<span style="color: #16a34a; font-weight: bold;">Ø«Ø¨Øª Ø´Ø¯!</span><br><small>Ø´Ù†Ø§Ø³Ù‡: ${data.id}</small>`;
-                    document.getElementById('job-title').value = '';
-                    fetchViewportOpportunities();
-                    new maplibregl.Popup()
-                        .setLngLat(selectedCoords)
-                        .setHTML(`<b>ÙØ±ØµØª Ø«Ø¨Øª Ø´Ø¯:</b><br>${title}`)
-                        .addTo(map);
-                } else {
-                    out.innerText = 'Ø®Ø·Ø§ Ø¯Ø± Ø«Ø¨Øª ÙØ±ØµØª';
-                }
-            } catch (err) {
-                out.innerText = 'Ø®Ø·Ø§ Ø¯Ø± Ø´Ø¨Ú©Ù‡';
-            }
-        }
-
-        // Ø¨Ø§Ø±Ú¯Ø°Ø§Ø±ÛŒ Ù…Ø§Ø±Ú©Ø±Ù‡Ø§ÛŒ Ø«Ø¨Øªâ€ŒØ´Ø¯Ù‡ Ú©Ø§Ø±ÙØ±Ù…Ø§ÛŒØ§Ù† Ø¯Ø± Ú©Ø§Ø¯Ø± Ø¯ÛŒØ¯Ú¯Ø§Ù‡
-        async function fetchViewportOpportunities() {
-            const bounds = map.getBounds();
-            const bboxStr = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
-            const zoom = Math.round(map.getZoom());
-
-            try {
-                const res = await fetch(`${API_BASE}/api/v1/map/features?bbox=${bboxStr}&zoom=${zoom}&source=opportunity`);
-                if (res.ok) {
-                    const geojson = await res.json();
-                    map.getSource('opportunities').setData(geojson);
-                    const count = geojson.features ? geojson.features.length : 0;
-                    document.getElementById('viewport-output').innerText = `Ù…Ø§Ø±Ú©Ø±Ù‡Ø§ÛŒ Ú©Ø§Ø±ÙØ±Ù…Ø§ÛŒØ§Ù†: ${count} Ù…ÙˆØ±Ø¯`;
-                }
-            } catch (e) {}
-        }
-
-        map.on('moveend', fetchViewportOpportunities);
-        map.on('load', fetchViewportOpportunities);
-
-        // Ù¾Ø§Ù¾â€ŒØ¢Ù¾ Ù‡Ù†Ú¯Ø§Ù… Ú©Ù„ÛŒÚ© Ø±ÙˆÛŒ Ù…Ø§Ø±Ú©Ø±Ù‡Ø§ÛŒ Ù‚Ø±Ù…Ø² Ú©Ø§Ø±ÙØ±Ù…Ø§
-        map.on('click', 'employer_markers', (e) => {
-            const coords = e.features[0].geometry.coordinates.slice();
-            const title = e.features[0].properties.address_summary || 'ÙØ±ØµØª Ø´ØºÙ„ÛŒ';
-            new maplibregl.Popup()
-                .setLngLat(coords)
-                .setHTML(`<b style="color: #dc2626;">ÙØ±ØµØª Ø´ØºÙ„ÛŒ Ú©Ø§Ø±ÙØ±Ù…Ø§:</b><br>${title}`)
-                .addTo(map);
-        });
-    </script>
-</body>
-</html>
-
-
-
+--------------------------------------------------
+FILE: geo-types\Cargo.toml
+--------------------------------------------------
+
+[package]
+name = "geo-types"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
