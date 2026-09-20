@@ -1,0 +1,23 @@
+use clap::Parser;
+use std::path::PathBuf;
+
+#[derive(Parser, Debug)]
+#[command(name = "geo-importer")]
+#[command(about = "High-performance streaming geospatial data importer for OpenStreetMap & Custom Data")]
+pub struct CliArgs {
+    /// Path to the .osm.pbf file (e.g. data/iran-latest.osm.pbf)
+    #[arg(short, long)]
+    pub file: Option<PathBuf>,
+
+    /// Batch size for bulk database inserts
+    #[arg(short, long, default_value_t = 500)]
+    pub batch_size: usize,
+
+    /// Seed sample opportunity locations for testing
+    #[arg(long, default_value_t = false)]
+    pub seed_samples: bool,
+
+    /// PostgreSQL Database URL
+    #[arg(long)]
+    pub database_url: Option<String>,
+}

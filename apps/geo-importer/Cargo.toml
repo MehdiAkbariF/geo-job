@@ -1,0 +1,20 @@
+[package]
+name = "geo-importer"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+geo-types = { path = "../../crates/geo-types" }
+geo-domain = { path = "../../crates/geo-domain" }
+geo-storage = { path = "../../crates/geo-storage" }
+clap.workspace = true
+osmpbf = "0.3"
+tokio.workspace = true
+sqlx.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

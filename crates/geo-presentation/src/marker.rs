@@ -1,5 +1,4 @@
 use geo_domain::Location;
-use geo_types::GeoPoint;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
