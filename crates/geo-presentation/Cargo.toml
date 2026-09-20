@@ -1,0 +1,14 @@
+[package]
+name = "geo-presentation"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+geo-types = { path = "../geo-types" }
+geo-domain = { path = "../geo-domain" }
+geo-query = { path = "../geo-query" }
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true

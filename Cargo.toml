@@ -4,6 +4,9 @@ members = [
     "crates/geo-types",
     "crates/geo-domain",
     "crates/geo-storage",
+    "crates/geo-query",
+    "crates/geo-presentation",
+    "crates/geo-tiles",
 ]
 
 [workspace.package]
