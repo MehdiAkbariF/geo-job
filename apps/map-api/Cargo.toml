@@ -1,0 +1,27 @@
+[package]
+name = "map-api"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+geo-types = { path = "../../crates/geo-types" }
+geo-domain = { path = "../../crates/geo-domain" }
+geo-storage = { path = "../../crates/geo-storage" }
+geo-query = { path = "../../crates/geo-query" }
+geo-presentation = { path = "../../crates/geo-presentation" }
+geo-tiles = { path = "../../crates/geo-tiles" }
+
+axum.workspace = true
+tokio.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+sqlx.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+thiserror.workspace = true

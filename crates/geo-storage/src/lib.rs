@@ -19,7 +19,7 @@ pub struct DatabaseConfig {
 impl Default for DatabaseConfig {
     fn default() -> Self {
         Self {
-            database_url: "postgres://map_user:map_password@localhost:5432/map_platform".to_string(),
+            database_url: "postgres://map_user:map_password@localhost:5433/map_platform".to_string(),
             max_connections: 20,
             min_connections: 2,
             connect_timeout_sec: 10,
