@@ -1,9 +1,10 @@
 use crate::error::DomainError;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// Exact frozen Application lifecycle (Section 20 of MASTER PROMPT 03).
 /// SUBMITTED -> REVIEWING -> INTERVIEW -> (ACCEPTED / REJECTED)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ApplicationStatus {
     Submitted,
@@ -35,7 +36,6 @@ impl ApplicationStatus {
         }
     }
 
-    /// Validates allowed state transitions according to section 20
     pub fn can_transition_to(&self, next: Self) -> bool {
         match (self, next) {
             (Self::Submitted, Self::Reviewing) => true,
@@ -43,7 +43,7 @@ impl ApplicationStatus {
             (Self::Reviewing, Self::Rejected) => true,
             (Self::Interview, Self::Accepted) => true,
             (Self::Interview, Self::Rejected) => true,
-            _ => false, // ACCEPTED and REJECTED are terminal
+            _ => false,
         }
     }
 

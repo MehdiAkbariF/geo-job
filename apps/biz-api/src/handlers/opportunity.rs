@@ -8,12 +8,14 @@ use axum::{
     Json,
 };
 use biz_application::opportunity::CreateOpportunityCommand;
+use biz_domain::opportunity::Opportunity;
 use uuid::Uuid;
 
 #[utoipa::path(
     post,
     path = "/api/v1/companies/{company_id}/opportunities",
-    responses((status = 201, description = "Opportunity created")),
+    request_body = CreateOpportunityCommand,
+    responses((status = 201, description = "Opportunity created", body = Opportunity)),
     tag = "Opportunities"
 )]
 pub async fn create_opportunity_handler(
@@ -25,6 +27,21 @@ pub async fn create_opportunity_handler(
     cmd.company_id = company_id;
     let opp = state.opp_use_cases.create_opportunity(auth.user_id, cmd).await?;
     Ok((StatusCode::CREATED, Json(opp)))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/opportunities/{id}",
+    responses((status = 200, description = "Opportunity details", body = Opportunity)),
+    tag = "Opportunities"
+)]
+pub async fn get_opportunity_handler(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    let opp = state.discovery_repo_pool().find_by_id(id).await?
+        .ok_or(biz_storage::StorageError::UserNotFound)?;
+    Ok(Json(opp))
 }
 
 #[utoipa::path(
@@ -54,6 +71,21 @@ pub async fn pause_opportunity_handler(
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, ApiError> {
     state.opp_use_cases.pause(auth.user_id, id).await?;
+    Ok(StatusCode::OK)
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/opportunities/{id}/resume",
+    responses((status = 200, description = "Opportunity resumed")),
+    tag = "Opportunities"
+)]
+pub async fn resume_opportunity_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    state.opp_use_cases.resume(auth.user_id, id).await?;
     Ok(StatusCode::OK)
 }
 

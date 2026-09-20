@@ -7,7 +7,6 @@ use biz_storage::{
 };
 use uuid::Uuid;
 
-
 #[derive(Clone)]
 pub struct ApplicationUseCases {
     app_repo: ApplicationRepository,
@@ -31,7 +30,6 @@ impl ApplicationUseCases {
         }
     }
 
-    /// Candidate Workflow: Submit application to an open opportunity
     pub async fn submit_application(
         &self,
         user_id: Uuid,
@@ -49,7 +47,6 @@ impl ApplicationUseCases {
             .await?
             .ok_or(StorageError::UserNotFound)?;
 
-        // Only PUBLISHED opportunities accept applications (Section 37)
         if opportunity.status != OpportunityStatus::Published {
             return Err(ApplicationError::Validation(
                 "This opportunity is not currently accepting applications".into(),
@@ -73,7 +70,6 @@ impl ApplicationUseCases {
         })
     }
 
-    /// Employer Workflow: Change application status through hiring pipeline
     pub async fn change_status(
         &self,
         actor_user_id: Uuid,
@@ -92,7 +88,6 @@ impl ApplicationUseCases {
             .await?
             .ok_or(StorageError::UserNotFound)?;
 
-        // Authorize that actor belongs to the hiring company and has review permissions
         let role = self
             .company_repo
             .get_user_role(opp.company_id, actor_user_id)
@@ -112,5 +107,23 @@ impl ApplicationUseCases {
         self.app_repo.update_status(application_id, validated_status).await?;
 
         Ok(())
+    }
+
+    pub async fn list_by_opportunity(
+        &self,
+        actor_user_id: Uuid,
+        opportunity_id: Uuid,
+    ) -> Result<Vec<Application>, ApplicationError> {
+        let opp = self.opp_repo.find_by_id(opportunity_id).await?.ok_or(StorageError::UserNotFound)?;
+        let role = self.company_repo.get_user_role(opp.company_id, actor_user_id).await?.ok_or_else(|| {
+            ApplicationError::Unauthorized("Not authorized for this company".into())
+        })?;
+
+        if !role.can_review_applications() {
+            return Err(ApplicationError::Unauthorized("Insufficient permissions".into()));
+        }
+
+        let list = self.app_repo.list_by_opportunity(opportunity_id).await?;
+        Ok(list)
     }
 }

@@ -110,75 +110,104 @@ impl CompanyRepository {
         Ok((company, membership))
     }
 
-    pub async fn find_by_id(&self, company_id: Uuid) -> Result<Option<Company>, StorageError> {
+    pub async fn update_company(
+        &self,
+        company_id: Uuid,
+        name: &str,
+        slug: &str,
+        description: Option<&str>,
+        website: Option<&str>,
+        logo_storage_key: Option<&str>,
+    ) -> Result<Company, StorageError> {
         let sql = r#"
-            SELECT id, name, slug, description, logo_storage_key, website, verification_status, created_at, updated_at
-            FROM companies
+            UPDATE companies
+            SET name = $2,
+                slug = $3,
+                description = $4,
+                website = $5,
+                logo_storage_key = COALESCE($6, logo_storage_key),
+                updated_at = NOW()
             WHERE id = $1
+            RETURNING id, name, slug, description, logo_storage_key, website, verification_status, created_at, updated_at
         "#;
 
-        let row: Option<CompanyDbRow> = sqlx::query_as(sql)
+        let row = sqlx::query_as::<_, CompanyDbRow>(sql)
             .bind(company_id)
-            .fetch_optional(&self.pool)
+            .bind(name)
+            .bind(slug)
+            .bind(description)
+            .bind(website)
+            .bind(logo_storage_key)
+            .fetch_one(&self.pool)
             .await?;
 
+        Ok(row.to_domain())
+    }
+
+    pub async fn find_by_id(&self, company_id: Uuid) -> Result<Option<Company>, StorageError> {
+        let sql = "SELECT * FROM companies WHERE id = $1";
+        let row: Option<CompanyDbRow> = sqlx::query_as(sql).bind(company_id).fetch_optional(&self.pool).await?;
         Ok(row.map(CompanyDbRow::to_domain))
     }
 
     pub async fn find_by_slug(&self, slug: &str) -> Result<Option<Company>, StorageError> {
-        let sql = r#"
-            SELECT id, name, slug, description, logo_storage_key, website, verification_status, created_at, updated_at
-            FROM companies
-            WHERE LOWER(slug) = LOWER($1)
-        "#;
-
-        let row: Option<CompanyDbRow> = sqlx::query_as(sql)
-            .bind(slug)
-            .fetch_optional(&self.pool)
-            .await?;
-
+        let sql = "SELECT * FROM companies WHERE LOWER(slug) = LOWER($1)";
+        let row: Option<CompanyDbRow> = sqlx::query_as(sql).bind(slug).fetch_optional(&self.pool).await?;
         Ok(row.map(CompanyDbRow::to_domain))
     }
 
-    pub async fn get_user_role(
-        &self,
-        company_id: Uuid,
-        user_id: Uuid,
-    ) -> Result<Option<CompanyRole>, StorageError> {
-        let sql = r#"
-            SELECT role
-            FROM company_memberships
-            WHERE company_id = $1 AND user_id = $2
-        "#;
-
-        let role_str: Option<String> = sqlx::query_scalar(sql)
-            .bind(company_id)
-            .bind(user_id)
-            .fetch_optional(&self.pool)
-            .await?;
-
+    pub async fn get_user_role(&self, company_id: Uuid, user_id: Uuid) -> Result<Option<CompanyRole>, StorageError> {
+        let sql = "SELECT role FROM company_memberships WHERE company_id = $1 AND user_id = $2";
+        let role_str: Option<String> = sqlx::query_scalar(sql).bind(company_id).bind(user_id).fetch_optional(&self.pool).await?;
         Ok(role_str.as_deref().and_then(CompanyRole::from_str))
     }
 
-    pub async fn add_company_location(
-        &self,
-        company_id: Uuid,
-        location_id: Uuid,
-        is_headquarters: bool,
-    ) -> Result<(), StorageError> {
+    pub async fn add_company_location(&self, company_id: Uuid, location_id: Uuid, is_headquarters: bool) -> Result<(), StorageError> {
         let sql = r#"
             INSERT INTO company_locations (company_id, location_id, is_headquarters)
             VALUES ($1, $2, $3)
             ON CONFLICT (company_id, location_id) DO UPDATE SET is_headquarters = EXCLUDED.is_headquarters
         "#;
+        sqlx::query(sql).bind(company_id).bind(location_id).bind(is_headquarters).execute(&self.pool).await?;
+        Ok(())
+    }
 
-        sqlx::query(sql)
-            .bind(company_id)
-            .bind(location_id)
-            .bind(is_headquarters)
-            .execute(&self.pool)
-            .await?;
+    pub async fn list_members(&self, company_id: Uuid) -> Result<Vec<CompanyMembership>, StorageError> {
+        #[derive(sqlx::FromRow)]
+        struct MemberDbRow {
+            id: Uuid,
+            company_id: Uuid,
+            user_id: Uuid,
+            role: String,
+            created_at: DateTime<Utc>,
+            updated_at: DateTime<Utc>,
+        }
 
+        let sql = "SELECT * FROM company_memberships WHERE company_id = $1 ORDER BY created_at ASC";
+        let rows = sqlx::query_as::<_, MemberDbRow>(sql).bind(company_id).fetch_all(&self.pool).await?;
+
+        Ok(rows
+            .into_iter()
+            .filter_map(|r| {
+                CompanyRole::from_str(&r.role).map(|role| CompanyMembership {
+                    id: r.id,
+                    company_id: r.company_id,
+                    user_id: r.user_id,
+                    role,
+                    created_at: r.created_at,
+                    updated_at: r.updated_at,
+                })
+            })
+            .collect())
+    }
+
+    pub async fn add_member(&self, company_id: Uuid, user_id: Uuid, role: CompanyRole) -> Result<(), StorageError> {
+        let sql = r#"
+            INSERT INTO company_memberships (company_id, user_id, role)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (company_id, user_id) DO UPDATE SET role = EXCLUDED.role, updated_at = NOW()
+        "#;
+        sqlx::query(sql).bind(company_id).bind(user_id).bind(role.as_str()).execute(&self.pool).await?;
         Ok(())
     }
 }

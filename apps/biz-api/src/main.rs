@@ -65,17 +65,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/candidates/me/preferences", get(handlers::candidate::get_preferences_handler).put(handlers::candidate::set_preferences_handler))
         .route("/candidates/me/applications", get(handlers::candidate::list_my_applications_handler))
 
+        // Companies Management & Showcase
+        .route("/companies", post(handlers::company::create_company_handler))
+        .route("/companies/:id", get(handlers::company::get_company_handler).put(handlers::company::update_company_handler))
+        .route("/companies/:id/locations", post(handlers::company::add_company_location_handler))
+        .route("/companies/:id/members", get(handlers::company::list_members_handler).post(handlers::company::add_member_handler))
+        .route("/companies/:id/opportunities", get(handlers::company::list_company_opportunities_handler))
+        .route("/companies/:id/public-opportunities", get(handlers::company::list_public_company_opportunities_handler))
+
         // Discovery / Search
         .route("/opportunities/search", get(handlers::discovery::search_opportunities_handler))
+        .route("/opportunities/:id", get(handlers::opportunity::get_opportunity_handler))
 
         // Opportunities Lifecycle
         .route("/companies/:company_id/opportunities", post(handlers::opportunity::create_opportunity_handler))
         .route("/opportunities/:id/publish", post(handlers::opportunity::publish_opportunity_handler))
         .route("/opportunities/:id/pause", post(handlers::opportunity::pause_opportunity_handler))
+        .route("/opportunities/:id/resume", post(handlers::opportunity::resume_opportunity_handler))
         .route("/opportunities/:id/close", post(handlers::opportunity::close_opportunity_handler))
 
-        // Applications
-        .route("/opportunities/:id/applications", post(handlers::application::submit_application_handler))
+        // Employer ATS / Applications
+        .route("/opportunities/:id/applications", post(handlers::application::submit_application_handler).get(handlers::company::list_opportunity_applicants_handler))
         .route("/applications/:id/status", post(handlers::application::change_application_status_handler))
 
         // Saved Items (Opportunities, Companies, Searches)
@@ -84,6 +94,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/companies/:id/save", post(handlers::saved::save_company_handler).delete(handlers::saved::remove_saved_company_handler))
         .route("/me/saved-companies", get(handlers::saved::list_saved_companies_handler))
         .route("/me/saved-searches", post(handlers::saved::save_search_handler).get(handlers::saved::list_saved_searches_handler))
+
+        // Taxonomies
+        .route("/taxonomies/categories", get(handlers::taxonomy::list_categories_handler))
+        .route("/taxonomies/industries", get(handlers::taxonomy::list_industries_handler))
+        .route("/taxonomies/occupations", get(handlers::taxonomy::list_occupations_handler))
+        .route("/taxonomies/skills/resolve", get(handlers::taxonomy::resolve_skill_handler))
 
         // Governance / Reports
         .route("/opportunities/:id/reports", post(handlers::governance::report_opportunity_handler));

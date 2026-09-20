@@ -79,7 +79,6 @@ impl OpportunityRepository {
         Self { pool }
     }
 
-    /// Atomically creates an opportunity and links its physical locations and required skills
     pub async fn create_opportunity(&self, item: &NewOpportunity) -> Result<Opportunity, StorageError> {
         let mut tx = self.pool.begin().await?;
 
@@ -112,7 +111,6 @@ impl OpportunityRepository {
             .fetch_one(&mut *tx)
             .await?;
 
-        // Link multiple physical locations to PostGIS shared table
         for loc_id in &item.location_ids {
             sqlx::query("INSERT INTO opportunity_locations (opportunity_id, location_id) VALUES ($1, $2)")
                 .bind(row.id)
@@ -121,7 +119,6 @@ impl OpportunityRepository {
                 .await?;
         }
 
-        // Link skills
         for skill_id in &item.skill_ids {
             sqlx::query("INSERT INTO opportunity_skills (opportunity_id, skill_id, is_required) VALUES ($1, $2, true)")
                 .bind(row.id)
@@ -136,15 +133,21 @@ impl OpportunityRepository {
 
     pub async fn find_by_id(&self, id: Uuid) -> Result<Option<Opportunity>, StorageError> {
         let sql = "SELECT * FROM opportunities WHERE id = $1";
-        let row: Option<OpportunityDbRow> = sqlx::query_as(sql)
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?;
-
+        let row: Option<OpportunityDbRow> = sqlx::query_as(sql).bind(id).fetch_optional(&self.pool).await?;
         row.map(|r| r.to_domain()).transpose()
     }
 
-    /// Updates opportunity lifecycle status atomically
+    pub async fn list_by_company(&self, company_id: Uuid, only_published: bool) -> Result<Vec<Opportunity>, StorageError> {
+        let sql = if only_published {
+            "SELECT * FROM opportunities WHERE company_id = $1 AND status = 'published' AND (expires_at IS NULL OR expires_at > NOW()) ORDER BY published_at DESC"
+        } else {
+            "SELECT * FROM opportunities WHERE company_id = $1 ORDER BY created_at DESC"
+        };
+
+        let rows = sqlx::query_as::<_, OpportunityDbRow>(sql).bind(company_id).fetch_all(&self.pool).await?;
+        rows.into_iter().map(|r| r.to_domain()).collect()
+    }
+
     pub async fn update_status(
         &self,
         id: Uuid,
@@ -156,7 +159,8 @@ impl OpportunityRepository {
             UPDATE opportunities
             SET status = $2,
                 published_at = COALESCE($3, published_at),
-                expires_at = COALESCE($4, expires_at)
+                expires_at = COALESCE($4, expires_at),
+                updated_at = NOW()
             WHERE id = $1
         "#;
 

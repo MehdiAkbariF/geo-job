@@ -1,18 +1,24 @@
 use utoipa::OpenApi;
 
 use crate::handlers::auth::RefreshTokenRequest;
+use crate::handlers::taxonomy::SkillQuery;
 use biz_application::application::{ApplicationDto, ChangeApplicationStatusCommand, SubmitApplicationCommand};
 use biz_application::candidate::{
     AddExperienceCommand, CandidatePreferencesDto, CandidateProfileDto, ExperienceDto,
     SetSkillsCommand, TrackedApplicationDto, UpdateProfileCommand,
+};
+use biz_application::company::{
+    AddCompanyLocationCommand, AddMemberCommand, CompanyDto, CompanyMemberDto,
+    CreateCompanyCommand, UpdateCompanyCommand,
 };
 use biz_application::governance::CreateReportCommand;
 use biz_application::identity::{AuthResponseDto, LoginCommand, RegisterCommand};
 use biz_application::opportunity::CreateOpportunityCommand;
 use biz_application::saved::SaveSearchCommand;
 
+use biz_domain::application::{Application, ApplicationStatus};
 use biz_domain::opportunity::{Opportunity, OpportunityStatus, OpportunityType, RemoteScope, Salary, WorkplaceType};
-use biz_domain::taxonomy::ExperienceLevel;
+use biz_domain::taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skill};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -34,13 +40,26 @@ use biz_domain::taxonomy::ExperienceLevel;
         crate::handlers::candidate::set_preferences_handler,
         crate::handlers::candidate::list_my_applications_handler,
 
-        // Discovery
+        // Companies Management & Showcase
+        crate::handlers::company::create_company_handler,
+        crate::handlers::company::update_company_handler,
+        crate::handlers::company::get_company_handler,
+        crate::handlers::company::add_company_location_handler,
+        crate::handlers::company::list_members_handler,
+        crate::handlers::company::add_member_handler,
+        crate::handlers::company::list_company_opportunities_handler,
+        crate::handlers::company::list_public_company_opportunities_handler,
+        crate::handlers::company::list_opportunity_applicants_handler,
+
+        // Discovery & Details
         crate::handlers::discovery::search_opportunities_handler,
+        crate::handlers::opportunity::get_opportunity_handler,
 
         // Opportunities Lifecycle
         crate::handlers::opportunity::create_opportunity_handler,
         crate::handlers::opportunity::publish_opportunity_handler,
         crate::handlers::opportunity::pause_opportunity_handler,
+        crate::handlers::opportunity::resume_opportunity_handler,
         crate::handlers::opportunity::close_opportunity_handler,
 
         // Applications
@@ -56,6 +75,12 @@ use biz_domain::taxonomy::ExperienceLevel;
         crate::handlers::saved::list_saved_companies_handler,
         crate::handlers::saved::save_search_handler,
         crate::handlers::saved::list_saved_searches_handler,
+
+        // Taxonomies
+        crate::handlers::taxonomy::list_categories_handler,
+        crate::handlers::taxonomy::list_industries_handler,
+        crate::handlers::taxonomy::list_occupations_handler,
+        crate::handlers::taxonomy::resolve_skill_handler,
 
         // Governance
         crate::handlers::governance::report_opportunity_handler
@@ -73,10 +98,18 @@ use biz_domain::taxonomy::ExperienceLevel;
             SetSkillsCommand,
             CandidatePreferencesDto,
             TrackedApplicationDto,
+            CreateCompanyCommand,
+            UpdateCompanyCommand,
+            CompanyDto,
+            AddCompanyLocationCommand,
+            AddMemberCommand,
+            CompanyMemberDto,
             CreateOpportunityCommand,
             SubmitApplicationCommand,
             ChangeApplicationStatusCommand,
             ApplicationDto,
+            Application,
+            ApplicationStatus,
             SaveSearchCommand,
             CreateReportCommand,
             Opportunity,
@@ -85,14 +118,21 @@ use biz_domain::taxonomy::ExperienceLevel;
             RemoteScope,
             ExperienceLevel,
             Salary,
-            OpportunityStatus
+            OpportunityStatus,
+            Category,
+            Industry,
+            Occupation,
+            Skill
         )
     ),
     tags(
         (name = "Auth", description = "Authentication, tokens & sessions"),
         (name = "Candidate Profile", description = "Talent profile, experiences, skills & application tracking"),
-        (name = "Opportunities", description = "Opportunity lifecycle management"),
+        (name = "Companies", description = "Company profile, branch locations & team membership"),
+        (name = "Employer ATS", description = "Applicant tracking system & opportunity pipeline for hiring teams"),
+        (name = "Opportunities", description = "Opportunity lifecycle management (Draft, Publish, Pause, Close)"),
         (name = "Discovery", description = "Search & Discovery orchestration"),
+        (name = "Taxonomies", description = "Standard industries, job categories, occupations & skills autocomplete"),
         (name = "Applications", description = "Candidate job applications pipeline"),
         (name = "Saved", description = "Saved opportunities, companies & searches"),
         (name = "Governance", description = "Reports & platform governance")

@@ -1,13 +1,15 @@
 use biz_application::application::ApplicationUseCases;
 use biz_application::candidate::CandidateUseCases;
+use biz_application::company::CompanyUseCases;
 use biz_application::discovery::DiscoveryUseCases;
 use biz_application::governance::GovernanceUseCases;
 use biz_application::opportunity::OpportunityUseCases;
 use biz_application::saved::SavedUseCases;
+use biz_application::taxonomy::TaxonomyUseCases;
 use biz_storage::{
     ApplicationRepository, CandidateRepository, CompanyRepository, DiscoveryRepository,
-    GovernanceRepository, OpportunityRepository, SavedRepository, TokenRepository, TokenService,
-    UserRepository,
+    GovernanceRepository, OpportunityRepository, SavedRepository, TaxonomyRepository,
+    TokenRepository, TokenService, UserRepository,
 };
 use sqlx::PgPool;
 
@@ -22,6 +24,8 @@ pub struct AppState {
     pub app_use_cases: ApplicationUseCases,
     pub saved_use_cases: SavedUseCases,
     pub gov_use_cases: GovernanceUseCases,
+    pub company_use_cases: CompanyUseCases,
+    pub taxonomy_use_cases: TaxonomyUseCases,
 }
 
 impl AppState {
@@ -35,6 +39,7 @@ impl AppState {
         let saved_repo = SavedRepository::new(pool.clone());
         let discovery_repo = DiscoveryRepository::new(pool.clone());
         let gov_repo = GovernanceRepository::new(pool.clone());
+        let taxonomy_repo = TaxonomyRepository::new(pool.clone());
 
         let token_service = TokenService::new(jwt_secret);
 
@@ -53,7 +58,9 @@ impl AppState {
             company_repo.clone(),
         );
         let saved_use_cases = SavedUseCases::new(saved_repo, candidate_repo.clone());
-        let gov_use_cases = GovernanceUseCases::new(gov_repo, company_repo);
+        let gov_use_cases = GovernanceUseCases::new(gov_repo, company_repo.clone());
+        let company_use_cases = CompanyUseCases::new(company_repo, opp_repo);
+        let taxonomy_use_cases = TaxonomyUseCases::new(taxonomy_repo);
 
         Self {
             pool,
@@ -65,6 +72,12 @@ impl AppState {
             app_use_cases,
             saved_use_cases,
             gov_use_cases,
+            company_use_cases,
+            taxonomy_use_cases,
         }
+    }
+
+    pub fn discovery_repo_pool(&self) -> OpportunityRepository {
+        OpportunityRepository::new(self.pool.clone())
     }
 }
