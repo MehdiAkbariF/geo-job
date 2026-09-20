@@ -5,6 +5,7 @@ pub mod discovery;
 pub mod error;
 pub mod identity;
 pub mod opportunity;
+pub mod saved;
 pub mod taxonomy;
 
 pub use application::{Application, ApplicationStatus, NewApplication};
@@ -14,4 +15,5 @@ pub use discovery::{CompanySummary, OpportunitySearchResult, SearchPageResult, S
 pub use error::DomainError;
 pub use identity::{Email, NewUser, RawPassword, User, UserStatus};
 pub use opportunity::{NewOpportunity, Opportunity, OpportunityStatus, OpportunityType, RemoteScope, Salary, WorkplaceType};
+pub use saved::{CandidatePreferences, SavedCompany, SavedOpportunity, SavedSearch};
 pub use taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skill, SkillAlias};
