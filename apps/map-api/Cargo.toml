@@ -12,6 +12,7 @@ geo-storage = { path = "../../crates/geo-storage" }
 geo-query = { path = "../../crates/geo-query" }
 geo-presentation = { path = "../../crates/geo-presentation" }
 geo-tiles = { path = "../../crates/geo-tiles" }
+geo-geocoding = { path = "../../crates/geo-geocoding" }
 
 axum.workspace = true
 tokio.workspace = true

@@ -16,7 +16,6 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Structured Logging
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -27,7 +26,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("Initializing Geospatial Map API Service...");
 
-    // Database Connection Pool (Port 5433)
     let db_config = DatabaseConfig {
         database_url: std::env::var("DATABASE_URL").unwrap_or_else(|_| {
             "postgres://map_user:map_password@localhost:5433/map_platform".to_string()
@@ -44,13 +42,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let app_state = AppState::new(pool);
 
-    // REST API Routes
     let app = Router::new()
         .route("/healthz", get(handlers::health::health_check))
         .route("/api/v1/map/features", get(handlers::map::search_viewport))
         .route("/api/v1/map/nearby", get(handlers::map::search_nearby))
         .route("/api/v1/locations", post(handlers::locations::create_location))
         .route("/api/v1/tiles/:z/:x/:y.mvt", get(handlers::tiles::serve_vector_tile))
+        // New Endpoints: Reverse Geocoding & Administrative Areas
+        .route("/api/v1/reverse-geocoding", get(handlers::geocoding::reverse_geocode_handler))
+        .route("/api/v1/admin/areas", get(handlers::geocoding::list_admin_areas_handler))
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
