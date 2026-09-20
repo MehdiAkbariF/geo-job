@@ -1,6 +1,7 @@
 pub mod application_repo;
 pub mod candidate_repo;
 pub mod company_repo;
+pub mod discovery_repo;
 pub mod error;
 pub mod opportunity_repo;
 pub mod security;
@@ -12,6 +13,7 @@ pub mod user_repo;
 pub use application_repo::ApplicationRepository;
 pub use candidate_repo::CandidateRepository;
 pub use company_repo::CompanyRepository;
+pub use discovery_repo::DiscoveryRepository;
 pub use error::StorageError;
 pub use opportunity_repo::OpportunityRepository;
 pub use security::PasswordService;

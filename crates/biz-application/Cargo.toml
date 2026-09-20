@@ -6,6 +6,7 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+geo-types = { path = "../geo-types" }
 biz-domain = { path = "../biz-domain" }
 biz-storage = { path = "../biz-storage" }
 serde.workspace = true
@@ -13,3 +14,4 @@ uuid.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+rust_decimal.workspace = true
