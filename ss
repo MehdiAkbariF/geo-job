@@ -1,19 +1,24 @@
-# ۱. حذف فایل ۲ گیگابایتی قبلی
-Remove-Item "project_codebase_export.txt" -ErrorAction SilentlyContinue
+$outFile = "dump_codebase.txt"
+if (Test-Path $outFile) { Remove-Item $outFile -Force }
 
-# ۲. ساخت فایل جدید مختص کدهای منبع، کانفیگ‌ها و مایگریشن‌ها
-New-Item -ItemType File -Force -Path "project_codebase_export.txt"
-
-# ۳. استخراج هوشمند فقط فایل‌های متنی و سورس‌کد (بدون target و data و git)
+"====================================" | Out-File -FilePath $outFile -Encoding utf8
+"DIRECTORY STRUCTURE"                 | Out-File -FilePath $outFile -Append -Encoding utf8
+"====================================" | Out-File -FilePath $outFile -Append -Encoding utf8
 Get-ChildItem -Recurse -File | Where-Object { 
-    $_.FullName -notmatch '\\target\\' -and 
-    $_.FullName -notmatch '\\\.git\\' -and 
-    $_.FullName -notmatch '\\data\\' -and 
-    $_.Extension -in '.rs', '.toml', '.sql', '.html', '.md', '.yml' 
+    $_.FullName -notmatch '\\(target|\.git|node_modules)\\' -and $_.Name -ne $outFile 
+} | Resolve-Path -Relative | Out-File -FilePath $outFile -Append -Encoding utf8
+
+"`n====================================" | Out-File -FilePath $outFile -Append -Encoding utf8
+"FILES CONTENT"                       | Out-File -FilePath $outFile -Append -Encoding utf8
+"====================================" | Out-File -FilePath $outFile -Append -Encoding utf8
+Get-ChildItem -Recurse -File | Where-Object { 
+    $_.FullName -notmatch '\\(target|\.git|node_modules)\\' -and 
+    $_.Name -ne $outFile -and 
+    $_.Extension -match '\.(rs|toml|sql|json|yaml|yml|md|env)$' 
 } | ForEach-Object {
-    "======================================================================"
-    "FILE: $($_.FullName)"
-    "======================================================================"
-    Get-Content $_.FullName -Raw
-    "`n`n"
-} | Out-File -Encoding utf8 "project_codebase_export.txt"
+    $relPath = Resolve-Path -Path $_.FullName -Relative
+    "`n--------------------------------------------------" | Out-File -FilePath $outFile -Append -Encoding utf8
+    "FILE: $relPath"                                     | Out-File -FilePath $outFile -Append -Encoding utf8
+    "--------------------------------------------------"   | Out-File -FilePath $outFile -Append -Encoding utf8
+    Get-Content -Path $_.FullName -Raw | Out-File -FilePath $outFile -Append -Encoding utf8
+}

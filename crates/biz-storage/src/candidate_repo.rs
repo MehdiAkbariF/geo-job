@@ -108,6 +108,56 @@ impl CandidateRepository {
         Ok(row.to_domain())
     }
 
+    /// Fetches preferred geographical coordinates [longitude, latitude] for Near-Me discovery
+    pub async fn get_preferred_coordinates(&self, user_id: Uuid) -> Result<Option<(f64, f64)>, StorageError> {
+        // ۱. ابتدا اگر preferred_location_id ثبت شده بود، مختصات دقیق را استخراج کن
+        let loc_sql = r#"
+            SELECT 
+                ST_X(loc.coordinates::geometry) AS longitude,
+                ST_Y(loc.coordinates::geometry) AS latitude
+            FROM candidates c
+            INNER JOIN locations loc ON loc.id = c.preferred_location_id
+            WHERE c.user_id = $1
+            LIMIT 1
+        "#;
+
+        #[derive(sqlx::FromRow)]
+        struct CoordsRow {
+            longitude: f64,
+            latitude: f64,
+        }
+
+        let row: Option<CoordsRow> = sqlx::query_as(loc_sql)
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        if let Some(r) = row {
+            return Ok(Some((r.longitude, r.latitude)));
+        }
+
+        // ۲. در غیر این صورت، اگر شهر ترجیحی دارد، مرکز شهر را برگردان
+        let cand = self.find_by_user_id(user_id).await?;
+        if let Some(c) = cand {
+            if let Some(city) = c.preferred_city {
+                let city_trim = city.trim();
+                let coords = match city_trim {
+                    "تهران" | "tehran" => Some((51.3890, 35.7200)),
+                    "اصفهان" | "isfahan" => Some((51.6660, 32.6546)),
+                    "مشهد" | "mashhad" => Some((59.5700, 36.3000)),
+                    "شیراز" | "shiraz" => Some((52.5200, 29.6350)),
+                    "تبریز" | "tabriz" => Some((46.3600, 38.0500)),
+                    _ => None,
+                };
+                if coords.is_some() {
+                    return Ok(coords);
+                }
+            }
+        }
+
+        Ok(None)
+    }
+
     // Skills
     pub async fn set_skills(&self, candidate_id: Uuid, skill_ids: &[Uuid]) -> Result<(), StorageError> {
         let mut tx = self.pool.begin().await?;

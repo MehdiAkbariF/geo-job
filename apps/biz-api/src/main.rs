@@ -75,6 +75,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Discovery / Search & Map Bridge
         .route("/opportunities/search", get(handlers::discovery::search_opportunities_handler))
+        .route("/opportunities/map-pins", get(handlers::discovery::get_map_pins_handler))
         .route("/opportunities/by-location/:location_id", get(handlers::discovery::get_opportunities_by_location_handler))
         .route("/opportunities/:id", get(handlers::opportunity::get_opportunity_handler))
         .route("/opportunities/:id/track-click", post(handlers::opportunity::track_opportunity_click_handler))

@@ -14,6 +14,7 @@ use biz_application::company::{
     AddCompanyLocationCommand, AddMemberCommand, CompanyDto, CompanyMemberDto,
     CreateCompanyCommand, UpdateCompanyCommand,
 };
+use biz_application::discovery::{GetMapPinsRequest, SearchOpportunitiesRequest};
 use biz_application::governance::{
     CompanyVerificationDto, CreateReportCommand, ReviewVerificationCommand,
     SubmitVerificationCommand,
@@ -23,7 +24,7 @@ use biz_application::opportunity::CreateOpportunityCommand;
 use biz_application::saved::SaveSearchCommand;
 
 use biz_domain::application::{Application, ApplicationStatus};
-use biz_domain::discovery::{CompanySummary, OpportunitySearchResult, SearchPageResult};
+use biz_domain::discovery::{CompanySummary, MapPinSummary, OpportunitySearchResult, SearchPageResult, SpatialContext};
 use biz_domain::governance::{Report, VerificationStatus};
 use biz_domain::opportunity::{Opportunity, OpportunityStatus, OpportunityType, RemoteScope, Salary, WorkplaceType};
 use biz_domain::taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skill};
@@ -61,6 +62,7 @@ use biz_domain::taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skil
 
         // Discovery & Map Bridge
         crate::handlers::discovery::search_opportunities_handler,
+        crate::handlers::discovery::get_map_pins_handler,
         crate::handlers::discovery::get_opportunities_by_location_handler,
         crate::handlers::opportunity::get_opportunity_handler,
         crate::handlers::opportunity::track_opportunity_click_handler,
@@ -146,7 +148,9 @@ use biz_domain::taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skil
             Skill,
             CompanySummary,
             OpportunitySearchResult,
-            SearchPageResult
+            SearchPageResult,
+            SpatialContext,
+            MapPinSummary
         )
     ),
     tags(
