@@ -24,4 +24,7 @@ pub struct CliArgs {
     /// PostgreSQL Database URL
     #[arg(long)]
     pub database_url: Option<String>,
+    /// Seed 1500+ heavy test opportunities across Tehran neighborhoods
+    #[arg(long, default_value_t = false)]
+    pub seed_heavy_tehran: bool,
 }

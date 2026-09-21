@@ -45,9 +45,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    // ۲. اگر کاربر دستور بذرپاشی داده‌های تستی ایران را داده باشد:
-    if args.seed_samples {
-        seeder::seed_iran_test_data(&pool).await?;
+    // ۲. اگر کاربر دستور بذرپاشی سنگین تهران (۱۵۰۰+ شغل) را داده باشد:
+    if args.seed_heavy_tehran || args.seed_samples {
+        seeder::seed_heavy_tehran_data(&pool).await?;
         return Ok(());
     }
 
