@@ -10,8 +10,8 @@ use axum::{
 use biz_application::application::ApplicantSummaryDto;
 use biz_application::company::{
     AddCompanyLocationCommand, AddMemberCommand, CompanyDto, CompanyLocationDto,
-    CompanyMemberDto, CreateCompanyCommand, OnboardCompanyCommand, UpdateCompanyCommand,
-    UserCompanyMembershipDto,
+    CompanyMemberDto, CompanyPublicOpportunityDto, CreateCompanyCommand, OnboardCompanyCommand,
+    UpdateCompanyCommand, UserCompanyMembershipDto,
 };
 use biz_domain::opportunity::Opportunity;
 use uuid::Uuid;
@@ -174,7 +174,7 @@ pub async fn list_company_opportunities_handler(
 #[utoipa::path(
     get,
     path = "/api/v1/companies/{id}/public-opportunities",
-    responses((status = 200, description = "Public published opportunities of company", body = Vec<Opportunity>)),
+    responses((status = 200, description = "Public published opportunities of company with full PostGIS locations and company summary", body = Vec<CompanyPublicOpportunityDto>)),
     tag = "Companies"
 )]
 pub async fn list_public_company_opportunities_handler(

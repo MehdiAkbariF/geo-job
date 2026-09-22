@@ -1,0 +1,719 @@
+﻿==================================================
+BACKEND CONTEXT: COMPANY PUBLIC OPPORTUNITIES
+==================================================
+
+--------------------------------------------------
+FILE: apps\biz-api\src\handlers\company.rs
+--------------------------------------------------
+use crate::error::ApiError;
+use crate::extractors::auth::AuthenticatedUser;
+use crate::state::AppState;
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
+use biz_application::application::ApplicantSummaryDto;
+use biz_application::company::{
+    AddCompanyLocationCommand, AddMemberCommand, CompanyDto, CompanyLocationDto,
+    CompanyMemberDto, CreateCompanyCommand, OnboardCompanyCommand, UpdateCompanyCommand,
+    UserCompanyMembershipDto,
+};
+use biz_domain::opportunity::Opportunity;
+use uuid::Uuid;
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/companies/onboard",
+    request_body = OnboardCompanyCommand,
+    responses((status = 201, description = "Employer onboarded and verification submitted", body = CompanyDto)),
+    tag = "Companies"
+)]
+pub async fn onboard_company_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(cmd): Json<OnboardCompanyCommand>,
+) -> Result<impl IntoResponse, ApiError> {
+    let company = state.company_use_cases.onboard_company(auth.user_id, cmd).await?;
+    Ok((StatusCode::CREATED, Json(company)))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/me/companies",
+    responses((status = 200, description = "List all companies the authenticated user belongs to", body = Vec<UserCompanyMembershipDto>)),
+    tag = "Companies"
+)]
+pub async fn list_my_companies_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+) -> Result<impl IntoResponse, ApiError> {
+    let list = state.company_use_cases.list_my_companies(auth.user_id).await?;
+    Ok(Json(list))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/companies",
+    request_body = CreateCompanyCommand,
+    responses((status = 201, description = "Company registered successfully", body = CompanyDto)),
+    tag = "Companies"
+)]
+pub async fn create_company_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(cmd): Json<CreateCompanyCommand>,
+) -> Result<impl IntoResponse, ApiError> {
+    let company = state.company_use_cases.create_company(auth.user_id, cmd).await?;
+    Ok((StatusCode::CREATED, Json(company)))
+}
+
+#[utoipa::path(
+    put,
+    path = "/api/v1/companies/{id}",
+    request_body = UpdateCompanyCommand,
+    responses((status = 200, description = "Company updated successfully", body = CompanyDto)),
+    tag = "Companies"
+)]
+pub async fn update_company_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+    Json(cmd): Json<UpdateCompanyCommand>,
+) -> Result<impl IntoResponse, ApiError> {
+    let updated = state.company_use_cases.update_company(auth.user_id, id, cmd).await?;
+    Ok(Json(updated))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/companies/{id}",
+    responses((status = 200, description = "Company public info", body = CompanyDto)),
+    tag = "Companies"
+)]
+pub async fn get_company_handler(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    let company = state.company_use_cases.get_company(id).await?;
+    Ok(Json(company))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/companies/{id}/locations",
+    request_body = AddCompanyLocationCommand,
+    responses((status = 200, description = "Company location linked")),
+    tag = "Companies"
+)]
+pub async fn add_company_location_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+    Json(cmd): Json<AddCompanyLocationCommand>,
+) -> Result<impl IntoResponse, ApiError> {
+    state.company_use_cases.add_location(auth.user_id, id, cmd).await?;
+    Ok(StatusCode::OK)
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/companies/{id}/locations",
+    responses((status = 200, description = "List company physical branch locations", body = Vec<CompanyLocationDto>)),
+    tag = "Companies"
+)]
+pub async fn list_company_locations_handler(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    let list = state.company_use_cases.list_locations(id).await?;
+    Ok(Json(list))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/companies/{id}/members",
+    responses((status = 200, description = "List company team members", body = Vec<CompanyMemberDto>)),
+    tag = "Companies"
+)]
+pub async fn list_members_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    let members = state.company_use_cases.list_members(auth.user_id, id).await?;
+    Ok(Json(members))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/companies/{id}/members",
+    request_body = AddMemberCommand,
+    responses((status = 200, description = "Member added to company")),
+    tag = "Companies"
+)]
+pub async fn add_member_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+    Json(cmd): Json<AddMemberCommand>,
+) -> Result<impl IntoResponse, ApiError> {
+    state.company_use_cases.add_member(auth.user_id, id, cmd).await?;
+    Ok(StatusCode::OK)
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/companies/{id}/opportunities",
+    responses((status = 200, description = "Employer workspace opportunities list", body = Vec<Opportunity>)),
+    tag = "Employer ATS"
+)]
+pub async fn list_company_opportunities_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    let opps = state.company_use_cases.list_company_opportunities(auth.user_id, id).await?;
+    Ok(Json(opps))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/companies/{id}/public-opportunities",
+    responses((status = 200, description = "Public published opportunities of company", body = Vec<Opportunity>)),
+    tag = "Companies"
+)]
+pub async fn list_public_company_opportunities_handler(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    let opps = state.company_use_cases.list_public_opportunities(id).await?;
+    Ok(Json(opps))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/opportunities/{id}/applications",
+    responses((status = 200, description = "List applicants with candidate summary", body = Vec<ApplicantSummaryDto>)),
+    tag = "Employer ATS"
+)]
+pub async fn list_opportunity_applicants_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    let apps = state.app_use_cases.list_by_opportunity(auth.user_id, id).await?;
+    Ok(Json(apps))
+}
+
+--------------------------------------------------
+FILE: crates\biz-application\src\company\use_cases.rs
+--------------------------------------------------
+use super::dto::{
+    AddCompanyLocationCommand, AddMemberCommand, CompanyDto, CompanyLocationDto,
+    CompanyMemberDto, CreateCompanyCommand, OnboardCompanyCommand, UpdateCompanyCommand,
+    UserCompanyMembershipDto,
+};
+use crate::error::ApplicationError;
+use biz_domain::company::{CompanyRole, NewCompany};
+use biz_domain::opportunity::Opportunity;
+use biz_storage::{CompanyRepository, GovernanceRepository, OpportunityRepository, StorageError};
+use uuid::Uuid;
+
+#[derive(Clone)]
+pub struct CompanyUseCases {
+    company_repo: CompanyRepository,
+    opp_repo: OpportunityRepository,
+    gov_repo: GovernanceRepository,
+}
+
+impl CompanyUseCases {
+    pub fn new(
+        company_repo: CompanyRepository,
+        opp_repo: OpportunityRepository,
+        gov_repo: GovernanceRepository,
+    ) -> Self {
+        Self {
+            company_repo,
+            opp_repo,
+            gov_repo,
+        }
+    }
+
+    /// Onboards an employer atomically (Creates Company + Owner membership + Submits Verification Dossier)
+    pub async fn onboard_company(
+        &self,
+        user_id: Uuid,
+        cmd: OnboardCompanyCommand,
+    ) -> Result<CompanyDto, ApplicationError> {
+        let new_comp = NewCompany {
+            name: cmd.name,
+            slug: cmd.slug,
+            description: cmd.description,
+            website: cmd.website,
+        };
+
+        // Û±. Ø§ÛŒØ¬Ø§Ø¯ Ø´Ø±Ú©Øª Ùˆ Ø¹Ø¶ÙˆÛŒØª Owner
+        let (created, _) = self.company_repo.create_company(user_id, &new_comp).await?;
+
+        // Û². Ø§Ø±Ø³Ø§Ù„ ÙÙˆØ±ÛŒ Ù¾Ø±ÙˆÙ†Ø¯Ù‡ Ø§Ø­Ø±Ø§Ø² Ù‡ÙˆÛŒØª Ù‚Ø§Ù†ÙˆÙ†ÛŒ Ø¯Ø± ØµÙ Ø§Ø¯Ù…ÛŒÙ†
+        let mut evidence = vec![
+            format!("reg_no:{}", cmd.registration_number.trim()),
+            format!("national_id:{}", cmd.national_id.trim()),
+        ];
+        if let Some(license_key) = cmd.license_storage_key {
+            evidence.push(format!("license:{}", license_key));
+        }
+
+        let _ = self.gov_repo.submit_verification(created.id, &evidence).await?;
+
+        // Û³. Ø«Ø¨Øª Ù„Ø§Ú¯ Ø­Ø³Ø§Ø¨Ø±Ø³ÛŒ
+        let _ = self.gov_repo.append_audit_log(
+            Some(user_id),
+            "employer_onboard",
+            "company",
+            created.id,
+            &serde_json::json!({ "name": created.name, "reg_no": cmd.registration_number }),
+        ).await;
+
+        Ok(CompanyDto {
+            id: created.id,
+            name: created.name,
+            slug: created.slug,
+            description: created.description,
+            logo_storage_key: created.logo_storage_key,
+            website: created.website,
+            verification_status: "pending".to_string(),
+        })
+    }
+
+    pub async fn create_company(&self, user_id: Uuid, cmd: CreateCompanyCommand) -> Result<CompanyDto, ApplicationError> {
+        let new_comp = NewCompany {
+            name: cmd.name,
+            slug: cmd.slug,
+            description: cmd.description,
+            website: cmd.website,
+        };
+
+        let (created, _) = self.company_repo.create_company(user_id, &new_comp).await?;
+        Ok(CompanyDto {
+            id: created.id,
+            name: created.name,
+            slug: created.slug,
+            description: created.description,
+            logo_storage_key: created.logo_storage_key,
+            website: created.website,
+            verification_status: format!("{:?}", created.verification_status).to_lowercase(),
+        })
+    }
+
+    /// Lists all companies where the current authenticated user has an active membership role
+    pub async fn list_my_companies(&self, user_id: Uuid) -> Result<Vec<UserCompanyMembershipDto>, ApplicationError> {
+        let rows = self.company_repo.list_user_companies(user_id).await?;
+        Ok(rows.into_iter().map(|(comp, role)| UserCompanyMembershipDto {
+            company: CompanyDto {
+                id: comp.id,
+                name: comp.name,
+                slug: comp.slug,
+                description: comp.description,
+                logo_storage_key: comp.logo_storage_key,
+                website: comp.website,
+                verification_status: format!("{:?}", comp.verification_status).to_lowercase(),
+            },
+            role: role.as_str().to_string(),
+        }).collect())
+    }
+
+    pub async fn update_company(&self, actor_user_id: Uuid, company_id: Uuid, cmd: UpdateCompanyCommand) -> Result<CompanyDto, ApplicationError> {
+        let role = self.company_repo.get_user_role(company_id, actor_user_id).await?.ok_or_else(|| {
+            ApplicationError::Unauthorized("You are not a member of this company".into())
+        })?;
+
+        if !role.can_edit_company() {
+            return Err(ApplicationError::Unauthorized("Insufficient permissions to edit company".into()));
+        }
+
+        let updated = self.company_repo.update_company(
+            company_id,
+            &cmd.name,
+            &cmd.slug,
+            cmd.description.as_deref(),
+            cmd.website.as_deref(),
+            cmd.logo_storage_key.as_deref(),
+        ).await?;
+
+        Ok(CompanyDto {
+            id: updated.id,
+            name: updated.name,
+            slug: updated.slug,
+            description: updated.description,
+            logo_storage_key: updated.logo_storage_key,
+            website: updated.website,
+            verification_status: format!("{:?}", updated.verification_status).to_lowercase(),
+        })
+    }
+
+    pub async fn get_company(&self, company_id: Uuid) -> Result<CompanyDto, ApplicationError> {
+        let c = self.company_repo.find_by_id(company_id).await?.ok_or(StorageError::UserNotFound)?;
+        Ok(CompanyDto {
+            id: c.id,
+            name: c.name,
+            slug: c.slug,
+            description: c.description,
+            logo_storage_key: c.logo_storage_key,
+            website: c.website,
+            verification_status: format!("{:?}", c.verification_status).to_lowercase(),
+        })
+    }
+
+    pub async fn add_location(&self, actor_user_id: Uuid, company_id: Uuid, cmd: AddCompanyLocationCommand) -> Result<(), ApplicationError> {
+        let role = self.company_repo.get_user_role(company_id, actor_user_id).await?.ok_or_else(|| {
+            ApplicationError::Unauthorized("Not authorized for this company".into())
+        })?;
+
+        if !role.can_edit_company() {
+            return Err(ApplicationError::Unauthorized("Cannot add company location".into()));
+        }
+
+        self.company_repo.add_company_location(company_id, cmd.location_id, cmd.is_headquarters).await?;
+        Ok(())
+    }
+
+    pub async fn list_locations(&self, company_id: Uuid) -> Result<Vec<CompanyLocationDto>, ApplicationError> {
+        let rows = self.company_repo.list_company_locations(company_id).await?;
+        Ok(rows.into_iter().map(|r| CompanyLocationDto {
+            location_id: r.location_id,
+            address_summary: r.address_summary,
+            coordinates: [r.longitude, r.latitude],
+            is_headquarters: r.is_headquarters,
+        }).collect())
+    }
+
+    pub async fn list_members(&self, actor_user_id: Uuid, company_id: Uuid) -> Result<Vec<CompanyMemberDto>, ApplicationError> {
+        let _ = self.company_repo.get_user_role(company_id, actor_user_id).await?.ok_or_else(|| {
+            ApplicationError::Unauthorized("Not authorized to view team members".into())
+        })?;
+
+        let members = self.company_repo.list_members(company_id).await?;
+        Ok(members.into_iter().map(|m| CompanyMemberDto {
+            id: m.id,
+            user_id: m.user_id,
+            role: m.role.as_str().to_string(),
+        }).collect())
+    }
+
+    pub async fn add_member(&self, actor_user_id: Uuid, company_id: Uuid, cmd: AddMemberCommand) -> Result<(), ApplicationError> {
+        let role = self.company_repo.get_user_role(company_id, actor_user_id).await?.ok_or_else(|| {
+            ApplicationError::Unauthorized("Not a member".into())
+        })?;
+
+        if !role.can_manage_members() {
+            return Err(ApplicationError::Unauthorized("Only Owners and Admins can manage members".into()));
+        }
+
+        let new_role = CompanyRole::from_str(&cmd.role).ok_or_else(|| ApplicationError::Validation("Invalid role".into()))?;
+        self.company_repo.add_member(company_id, cmd.user_id, new_role).await?;
+        Ok(())
+    }
+
+    pub async fn list_company_opportunities(&self, actor_user_id: Uuid, company_id: Uuid) -> Result<Vec<Opportunity>, ApplicationError> {
+        let _ = self.company_repo.get_user_role(company_id, actor_user_id).await?.ok_or_else(|| {
+            ApplicationError::Unauthorized("Not a member of this company".into())
+        })?;
+
+        let list = self.opp_repo.list_by_company(company_id, false).await?;
+        Ok(list)
+    }
+
+    pub async fn list_public_opportunities(&self, company_id: Uuid) -> Result<Vec<Opportunity>, ApplicationError> {
+        let list = self.opp_repo.list_by_company(company_id, true).await?;
+        Ok(list)
+    }
+}
+
+--------------------------------------------------
+FILE: crates\biz-application\src\company\dto.rs
+--------------------------------------------------
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+use uuid::Uuid;
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct CreateCompanyCommand {
+    pub name: String,
+    pub slug: String,
+    pub description: Option<String>,
+    pub website: Option<String>,
+}
+
+/// Comprehensive Employer Onboarding Command (Company + Legal Verification Evidence)
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct OnboardCompanyCommand {
+    pub name: String,
+    pub slug: String,
+    pub description: Option<String>,
+    pub website: Option<String>,
+    pub registration_number: String,
+    pub national_id: String,
+    pub license_storage_key: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct UpdateCompanyCommand {
+    pub name: String,
+    pub slug: String,
+    pub description: Option<String>,
+    pub website: Option<String>,
+    pub logo_storage_key: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct AddCompanyLocationCommand {
+    #[schema(value_type = String, format = Uuid)]
+    pub location_id: Uuid,
+    pub is_headquarters: bool,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct CompanyLocationDto {
+    pub location_id: Uuid,
+    pub address_summary: Option<String>,
+    #[schema(value_type = [f64; 2], example = json!([51.4172, 35.7592]))]
+    pub coordinates: [f64; 2],
+    pub is_headquarters: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct AddMemberCommand {
+    #[schema(value_type = String, format = Uuid)]
+    pub user_id: Uuid,
+    pub role: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct CompanyDto {
+    pub id: Uuid,
+    pub name: String,
+    pub slug: String,
+    pub description: Option<String>,
+    pub logo_storage_key: Option<String>,
+    pub website: Option<String>,
+    pub verification_status: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct UserCompanyMembershipDto {
+    pub company: CompanyDto,
+    pub role: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct CompanyMemberDto {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub role: String,
+}
+
+--------------------------------------------------
+FILE: crates\biz-storage\src\opportunity_repo.rs
+--------------------------------------------------
+use crate::error::StorageError;
+use biz_domain::opportunity::{
+    NewOpportunity, Opportunity, OpportunityStatus, OpportunityType, RemoteScope, Salary, WorkplaceType,
+};
+use biz_domain::taxonomy::ExperienceLevel;
+use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
+use sqlx::PgPool;
+use uuid::Uuid;
+
+#[derive(Debug, sqlx::FromRow)]
+struct OpportunityDbRow {
+    pub id: Uuid,
+    pub company_id: Uuid,
+    pub title: String,
+    pub description: String,
+    pub category_id: Uuid,
+    pub occupation_id: Option<Uuid>,
+    pub opportunity_type: String,
+    pub workplace_type: String,
+    pub remote_scope: Option<String>,
+    pub experience_level: String,
+    pub salary_min: Option<Decimal>,
+    pub salary_max: Option<Decimal>,
+    pub salary_currency: String,
+    pub salary_period: String,
+    pub status: String,
+    pub published_at: Option<DateTime<Utc>>,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl OpportunityDbRow {
+    fn to_domain(self) -> Result<Opportunity, StorageError> {
+        let opp_type = OpportunityType::from_str(&self.opportunity_type)
+            .ok_or_else(|| StorageError::Security("Corrupt opportunity type".into()))?;
+        let workplace = WorkplaceType::from_str(&self.workplace_type)
+            .ok_or_else(|| StorageError::Security("Corrupt workplace type".into()))?;
+        let remote = self.remote_scope.as_deref().and_then(RemoteScope::from_str);
+        let exp_level = ExperienceLevel::from_str(&self.experience_level)
+            .ok_or_else(|| StorageError::Security("Corrupt experience level".into()))?;
+        let status = OpportunityStatus::from_str(&self.status)
+            .ok_or_else(|| StorageError::Security("Corrupt status".into()))?;
+
+        Ok(Opportunity {
+            id: self.id,
+            company_id: self.company_id,
+            title: self.title,
+            description: self.description,
+            category_id: self.category_id,
+            occupation_id: self.occupation_id,
+            opportunity_type: opp_type,
+            workplace_type: workplace,
+            remote_scope: remote,
+            experience_level: exp_level,
+            salary: Salary {
+                min: self.salary_min,
+                max: self.salary_max,
+                currency: self.salary_currency,
+                period: self.salary_period,
+            },
+            status,
+            published_at: self.published_at,
+            expires_at: self.expires_at,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+        })
+    }
+}
+
+#[derive(Clone)]
+pub struct OpportunityRepository {
+    pool: PgPool,
+}
+
+impl OpportunityRepository {
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+
+    pub async fn create_opportunity(&self, item: &NewOpportunity) -> Result<Opportunity, StorageError> {
+        let mut tx = self.pool.begin().await?;
+
+        let sql = r#"
+            INSERT INTO opportunities (
+                company_id, title, description, category_id, occupation_id,
+                opportunity_type, workplace_type, remote_scope, experience_level,
+                salary_min, salary_max, salary_currency, salary_period, status
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'draft')
+            RETURNING *
+        "#;
+
+        let remote_str = item.remote_scope.map(|r| r.as_str());
+
+        let row = sqlx::query_as::<_, OpportunityDbRow>(sql)
+            .bind(item.company_id)
+            .bind(&item.title)
+            .bind(&item.description)
+            .bind(item.category_id)
+            .bind(item.occupation_id)
+            .bind(item.opportunity_type.as_str())
+            .bind(item.workplace_type.as_str())
+            .bind(remote_str)
+            .bind(item.experience_level.as_str())
+            .bind(item.salary.min)
+            .bind(item.salary.max)
+            .bind(&item.salary.currency)
+            .bind(&item.salary.period)
+            .fetch_one(&mut *tx)
+            .await?;
+
+        for loc_id in &item.location_ids {
+            sqlx::query("INSERT INTO opportunity_locations (opportunity_id, location_id) VALUES ($1, $2)")
+                .bind(row.id)
+                .bind(loc_id)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        for skill_id in &item.skill_ids {
+            sqlx::query("INSERT INTO opportunity_skills (opportunity_id, skill_id, is_required) VALUES ($1, $2, true)")
+                .bind(row.id)
+                .bind(skill_id)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        tx.commit().await?;
+        row.to_domain()
+    }
+
+    pub async fn find_by_id(&self, id: Uuid) -> Result<Option<Opportunity>, StorageError> {
+        let sql = "SELECT * FROM opportunities WHERE id = $1";
+        let row: Option<OpportunityDbRow> = sqlx::query_as(sql).bind(id).fetch_optional(&self.pool).await?;
+        row.map(|r| r.to_domain()).transpose()
+    }
+
+    // ÙˆØ§Ú©Ø´ÛŒ Ù…Ø®ØªØµØ§Øª Ø§ÙˆÙ„ÛŒÙ† Ø´Ø¹Ø¨Ù‡ ÙÛŒØ²ÛŒÚ©ÛŒ Ø´ØºÙ„ Ø¨Ø±Ø§ÛŒ Ù…Ø­Ø§Ø³Ø¨Ù‡ Ù…Ø³Ø§ÙØª ØªØ±Ø¯Ø¯ Ú©Ø§Ø±Ø¬Ùˆ
+    pub async fn get_first_location_coords(&self, opp_id: Uuid) -> Result<Option<(f64, f64)>, StorageError> {
+        let sql = r#"
+            SELECT 
+                ST_X(loc.coordinates::geometry) AS longitude,
+                ST_Y(loc.coordinates::geometry) AS latitude
+            FROM opportunity_locations ol
+            INNER JOIN locations loc ON loc.id = ol.location_id
+            WHERE ol.opportunity_id = $1
+            LIMIT 1
+        "#;
+
+        #[derive(sqlx::FromRow)]
+        struct CoordsRow {
+            longitude: f64,
+            latitude: f64,
+        }
+
+        let row: Option<CoordsRow> = sqlx::query_as(sql).bind(opp_id).fetch_optional(&self.pool).await?;
+        Ok(row.map(|r| (r.longitude, r.latitude)))
+    }
+
+    pub async fn list_by_company(&self, company_id: Uuid, only_published: bool) -> Result<Vec<Opportunity>, StorageError> {
+        let sql = if only_published {
+            "SELECT * FROM opportunities WHERE company_id = $1 AND status = 'published' AND (expires_at IS NULL OR expires_at > NOW()) ORDER BY published_at DESC"
+        } else {
+            "SELECT * FROM opportunities WHERE company_id = $1 ORDER BY created_at DESC"
+        };
+
+        let rows = sqlx::query_as::<_, OpportunityDbRow>(sql).bind(company_id).fetch_all(&self.pool).await?;
+        rows.into_iter().map(|r| r.to_domain()).collect()
+    }
+
+    pub async fn update_status(
+        &self,
+        id: Uuid,
+        new_status: OpportunityStatus,
+        published_at: Option<DateTime<Utc>>,
+        expires_at: Option<DateTime<Utc>>,
+    ) -> Result<(), StorageError> {
+        let sql = r#"
+            UPDATE opportunities
+            SET status = $2,
+                published_at = COALESCE($3, published_at),
+                expires_at = COALESCE($4, expires_at),
+                updated_at = NOW()
+            WHERE id = $1
+        "#;
+
+        sqlx::query(sql)
+            .bind(id)
+            .bind(new_status.as_str())
+            .bind(published_at)
+            .bind(expires_at)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
+}

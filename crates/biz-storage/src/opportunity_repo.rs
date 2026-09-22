@@ -69,6 +69,37 @@ impl OpportunityDbRow {
     }
 }
 
+/// ساختار پایگاه داده جهت بازگرداندن آگهی همراه با مشخصات شرکت و مختصات جغرافیایی PostGIS
+#[derive(Debug, sqlx::FromRow)]
+pub struct PublicOpportunityRow {
+    pub id: Uuid,
+    pub company_id: Uuid,
+    pub company_name: String,
+    pub company_slug: String,
+    pub company_logo: Option<String>,
+    pub title: String,
+    pub description: String,
+    pub category_id: Uuid,
+    pub occupation_id: Option<Uuid>,
+    pub opportunity_type: String,
+    pub workplace_type: String,
+    pub remote_scope: Option<String>,
+    pub experience_level: String,
+    pub salary_min: Option<Decimal>,
+    pub salary_max: Option<Decimal>,
+    pub salary_currency: String,
+    pub salary_period: String,
+    pub status: String,
+    pub published_at: Option<DateTime<Utc>>,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub location_id: Option<Uuid>,
+    pub location_summary: Option<String>,
+    pub longitude: Option<f64>,
+    pub latitude: Option<f64>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 #[derive(Clone)]
 pub struct OpportunityRepository {
     pool: PgPool,
@@ -168,6 +199,57 @@ impl OpportunityRepository {
 
         let rows = sqlx::query_as::<_, OpportunityDbRow>(sql).bind(company_id).fetch_all(&self.pool).await?;
         rows.into_iter().map(|r| r.to_domain()).collect()
+    }
+
+    /// واکشی آگهی‌های منتشر شده شرکت به صورت غنی همراه با مشخصات شرکت و مختصات جغرافیایی شعبه در PostGIS
+    pub async fn list_public_with_locations(
+        &self,
+        company_id: Uuid,
+    ) -> Result<Vec<PublicOpportunityRow>, StorageError> {
+        let sql = r#"
+            SELECT 
+                o.id,
+                o.company_id,
+                c.name AS company_name,
+                c.slug AS company_slug,
+                c.logo_storage_key AS company_logo,
+                o.title,
+                o.description,
+                o.category_id,
+                o.occupation_id,
+                o.opportunity_type,
+                o.workplace_type,
+                o.remote_scope,
+                o.experience_level,
+                o.salary_min,
+                o.salary_max,
+                o.salary_currency,
+                o.salary_period,
+                o.status,
+                o.published_at,
+                o.expires_at,
+                loc.id AS location_id,
+                loc.address_summary AS location_summary,
+                ST_X(loc.coordinates::geometry) AS longitude,
+                ST_Y(loc.coordinates::geometry) AS latitude,
+                o.created_at,
+                o.updated_at
+            FROM opportunities o
+            INNER JOIN companies c ON c.id = o.company_id
+            LEFT JOIN opportunity_locations ol ON ol.opportunity_id = o.id
+            LEFT JOIN locations loc ON loc.id = ol.location_id
+            WHERE o.company_id = $1 
+              AND o.status = 'published' 
+              AND (o.expires_at IS NULL OR o.expires_at > NOW())
+            ORDER BY o.published_at DESC
+        "#;
+
+        let rows = sqlx::query_as::<_, PublicOpportunityRow>(sql)
+            .bind(company_id)
+            .fetch_all(&self.pool)
+            .await?;
+
+        Ok(rows)
     }
 
     pub async fn update_status(
