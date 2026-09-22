@@ -2,16 +2,17 @@ use crate::error::ApiError;
 use crate::extractors::auth::AuthenticatedUser;
 use crate::state::AppState;
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     Json,
 };
 use biz_application::candidate::{
     AddEducationCommand, AddExperienceCommand, AddLanguageCommand, AddReferenceCommand,
-    AddResumeCommand, CandidatePreferencesDto, CandidateProfileDto, SetSkillsCommand,
-    TrackedApplicationDto, UpdateProfileCommand,
+    AddResumeCommand, CandidatePreferencesDto, CandidateProfileDto, SearchTalentsRequest,
+    SendInvitationCommand, SetSkillsCommand, TrackedApplicationDto, UpdateProfileCommand,
 };
+use biz_domain::candidate::TalentSearchResult;
 use uuid::Uuid;
 
 #[utoipa::path(
@@ -42,6 +43,57 @@ pub async fn update_my_profile_handler(
 ) -> Result<impl IntoResponse, ApiError> {
     let updated = state.candidate_use_cases.update_profile(auth.user_id, cmd).await?;
     Ok(Json(updated))
+}
+
+// نقشه استعدادها و جستجوی کارجویان برای کارفرما
+#[utoipa::path(
+    get,
+    path = "/api/v1/talents/search",
+    params(SearchTalentsRequest),
+    responses((status = 200, description = "Search talents on map for employers", body = Vec<TalentSearchResult>)),
+    tag = "Employer ATS"
+)]
+pub async fn search_talents_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Query(req): Query<SearchTalentsRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let talents = state.candidate_use_cases.search_talents_for_employer(auth.user_id, req).await?;
+    Ok(Json(talents))
+}
+
+// کارجویان پیشنهادی متناسب با یک آگهی شغلی خاص
+#[utoipa::path(
+    get,
+    path = "/api/v1/opportunities/{id}/matched-candidates",
+    responses((status = 200, description = "Candidates matching this specific opportunity", body = Vec<TalentSearchResult>)),
+    tag = "Employer ATS"
+)]
+pub async fn get_matched_candidates_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    let list = state.candidate_use_cases.get_matched_talents_for_opportunity(auth.user_id, id).await?;
+    Ok(Json(list))
+}
+
+// ارسال دعوت‌نامه رسمی کارفرما به کارجو
+#[utoipa::path(
+    post,
+    path = "/api/v1/candidates/{id}/invite",
+    request_body = SendInvitationCommand,
+    responses((status = 201, description = "Job invitation sent")),
+    tag = "Employer ATS"
+)]
+pub async fn invite_candidate_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(candidate_id): Path<Uuid>,
+    Json(cmd): Json<SendInvitationCommand>,
+) -> Result<impl IntoResponse, ApiError> {
+    let inv_id = state.candidate_use_cases.send_job_invitation(auth.user_id, candidate_id, cmd).await?;
+    Ok((StatusCode::CREATED, Json(serde_json::json!({ "invitation_id": inv_id }))))
 }
 
 // تجربیات کاری
@@ -140,7 +192,7 @@ pub async fn delete_language_handler(
     Ok(StatusCode::OK)
 }
 
-// معرف‌ها و همکاران سابق
+// معرف‌ها
 #[utoipa::path(
     post,
     path = "/api/v1/candidates/me/references",

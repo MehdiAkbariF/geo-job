@@ -17,6 +17,7 @@ pub struct Candidate {
     pub preferred_city: Option<String>,
     pub preferred_commute_center_id: Option<Uuid>,
     pub preferred_commute_radius_meters: Option<i32>,
+    pub show_exact_location_to_employers: bool,
     pub is_foreign_national: bool,
     pub nationality_country_code: Option<String>,
     pub has_disability: bool,
@@ -108,4 +109,38 @@ pub struct CandidateResume {
     pub mime_type: String,
     pub file_size: i64,
     pub created_at: DateTime<Utc>,
+}
+
+/// مدل دعوت‌نامه رسمی کارفرما به کارجو
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct JobInvitation {
+    pub id: Uuid,
+    pub opportunity_id: Uuid,
+    pub candidate_id: Uuid,
+    pub company_id: Uuid,
+    pub sender_user_id: Uuid,
+    pub message: Option<String>,
+    pub status: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// مدل استعداد در نقشه و سرچ کارفرما
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct TalentSearchResult {
+    pub candidate_id: Uuid,
+    pub first_name: String,
+    pub last_name: String,
+    pub headline: Option<String>,
+    pub bio: Option<String>,
+    pub preferred_city: Option<String>,
+    pub job_search_status: String,
+    pub skills: Vec<String>,
+    #[schema(value_type = Option<[f64; 2]>)]
+    pub coordinates: Option<[f64; 2]>,
+    pub distance_meters: Option<f64>,
+    pub match_score: Option<u8>,
+    pub has_exact_location: bool,
+    pub experience_years: i32,
+    pub educations_count: usize,
 }

@@ -1,15 +1,15 @@
 use super::dto::{
     AddEducationCommand, AddExperienceCommand, AddLanguageCommand, AddReferenceCommand,
     AddResumeCommand, CandidatePreferencesDto, CandidateProfileDto, EducationDto, ExperienceDto,
-    LanguageDto, ReferenceDto, ResumeDto, SetSkillsCommand, SkillDto, TrackedApplicationDto,
-    UpdateProfileCommand,
+    LanguageDto, ReferenceDto, ResumeDto, SearchTalentsRequest, SendInvitationCommand,
+    SetSkillsCommand, SkillDto, TrackedApplicationDto, UpdateProfileCommand,
 };
 use crate::error::ApplicationError;
 use biz_domain::candidate::{
     Candidate, CandidateEducation, CandidateExperience, CandidateLanguage, CandidateReference,
-    CandidateResume,
+    CandidateResume, TalentSearchResult,
 };
-use biz_storage::{ApplicationRepository, CandidateRepository, StorageError};
+use biz_storage::{ApplicationRepository, CandidateRepository, CompanyRepository, OpportunityRepository, StorageError};
 use chrono::Utc;
 use uuid::Uuid;
 
@@ -17,6 +17,8 @@ use uuid::Uuid;
 pub struct CandidateUseCases {
     candidate_repo: CandidateRepository,
     app_repo: ApplicationRepository,
+    company_repo: Option<CompanyRepository>,
+    opp_repo: Option<OpportunityRepository>,
 }
 
 impl CandidateUseCases {
@@ -24,7 +26,19 @@ impl CandidateUseCases {
         Self {
             candidate_repo,
             app_repo,
+            company_repo: None,
+            opp_repo: None,
         }
+    }
+
+    pub fn with_employer_repos(
+        mut self,
+        company_repo: CompanyRepository,
+        opp_repo: OpportunityRepository,
+    ) -> Self {
+        self.company_repo = Some(company_repo);
+        self.opp_repo = Some(opp_repo);
+        self
     }
 
     pub async fn get_full_profile(&self, user_id: Uuid) -> Result<CandidateProfileDto, ApplicationError> {
@@ -43,6 +57,7 @@ impl CandidateUseCases {
                     preferred_city: None,
                     preferred_commute_center_id: None,
                     preferred_commute_radius_meters: Some(5000),
+                    show_exact_location_to_employers: false,
                     is_foreign_national: false,
                     nationality_country_code: None,
                     has_disability: false,
@@ -161,6 +176,7 @@ impl CandidateUseCases {
             preferred_city: candidate.preferred_city,
             residence_location_id: candidate.residence_location_id,
             preferred_commute_radius_meters: candidate.preferred_commute_radius_meters,
+            show_exact_location_to_employers: candidate.show_exact_location_to_employers,
             is_foreign_national: candidate.is_foreign_national,
             nationality_country_code: candidate.nationality_country_code,
             has_disability: candidate.has_disability,
@@ -210,6 +226,7 @@ impl CandidateUseCases {
         candidate.preferred_city = cmd.preferred_city;
         candidate.residence_location_id = cmd.residence_location_id;
         candidate.preferred_commute_radius_meters = cmd.preferred_commute_radius_meters;
+        if let Some(show) = cmd.show_exact_location_to_employers { candidate.show_exact_location_to_employers = show; }
         if let Some(foreign) = cmd.is_foreign_national { candidate.is_foreign_national = foreign; }
         candidate.nationality_country_code = cmd.nationality_country_code;
         if let Some(dis) = cmd.has_disability { candidate.has_disability = dis; }
@@ -235,7 +252,107 @@ impl CandidateUseCases {
         self.get_full_profile(user_id).await
     }
 
-    // سوابق شغلی
+    // --- جستجوی استعدادها روی نقشه ویژه کارفرما با گیت احراز هویت شرکت ---
+    pub async fn search_talents_for_employer(
+        &self,
+        employer_user_id: Uuid,
+        req: SearchTalentsRequest,
+    ) -> Result<Vec<TalentSearchResult>, ApplicationError> {
+        let skill_ids: Vec<Uuid> = req.skill_ids
+            .map(|raw| raw.split(',').filter_map(|s| Uuid::parse_str(s.trim()).ok()).collect())
+            .unwrap_or_default();
+
+        let bbox = match req.bbox {
+            Some(ref b) => {
+                let parts: Vec<&str> = b.split(',').collect();
+                if parts.len() == 4 {
+                    let w: f64 = parts[0].trim().parse().map_err(|_| ApplicationError::Validation("Invalid bbox".into()))?;
+                    let s: f64 = parts[1].trim().parse().map_err(|_| ApplicationError::Validation("Invalid bbox".into()))?;
+                    let e: f64 = parts[2].trim().parse().map_err(|_| ApplicationError::Validation("Invalid bbox".into()))?;
+                    let n: f64 = parts[3].trim().parse().map_err(|_| ApplicationError::Validation("Invalid bbox".into()))?;
+                    Some(geo_types::BoundingBox::new(w, s, e, n).map_err(|e| ApplicationError::Validation(e.to_string()))?)
+                } else { None }
+            }
+            None => None,
+        };
+
+        let point = match (req.lon, req.lat) {
+            (Some(lon), Some(lat)) => Some(geo_types::GeoPoint::new(lon, lat).map_err(|e| ApplicationError::Validation(e.to_string()))?),
+            _ => None,
+        };
+
+        let results = self.candidate_repo.search_talents(
+            req.q.as_deref(),
+            &skill_ids,
+            req.city.as_deref(),
+            req.actively_looking_only.unwrap_or(false),
+            bbox.as_ref(),
+            point.as_ref(),
+            req.radius_meters,
+            req.limit.unwrap_or(50),
+        ).await?;
+
+        Ok(results)
+    }
+
+    // --- رزومه‌های پیشنهادی و منطبق بر یک آگهی شغلی خاص برای کارفرما ---
+    pub async fn get_matched_talents_for_opportunity(
+        &self,
+        employer_user_id: Uuid,
+        opportunity_id: Uuid,
+    ) -> Result<Vec<TalentSearchResult>, ApplicationError> {
+        let opp_repo = self.opp_repo.as_ref().ok_or_else(|| ApplicationError::Validation("Missing repo".into()))?;
+        let opp = opp_repo.find_by_id(opportunity_id).await?.ok_or(StorageError::UserNotFound)?;
+
+        let opp_coords = opp_repo.get_first_location_coords(opportunity_id).await?;
+        let center = match opp_coords {
+            Some((lon, lat)) => Some(geo_types::GeoPoint::new(lon, lat).map_err(|e| ApplicationError::Validation(e.to_string()))?),
+            None => None,
+        };
+
+        let results = self.candidate_repo.search_talents(
+            None,
+            &[],
+            None,
+            false,
+            None,
+            center.as_ref(),
+            Some(20000.0), // شعاع ۲۰ کیلومتری پیرامون محل آگهی
+            30,
+        ).await?;
+
+        Ok(results)
+    }
+
+    // --- ارسال دعوت‌نامه رسمی کارفرما به کارجو ---
+    pub async fn send_job_invitation(
+        &self,
+        employer_user_id: Uuid,
+        candidate_id: Uuid,
+        cmd: SendInvitationCommand,
+    ) -> Result<Uuid, ApplicationError> {
+        let opp_repo = self.opp_repo.as_ref().ok_or_else(|| ApplicationError::Validation("Missing repo".into()))?;
+        let company_repo = self.company_repo.as_ref().ok_or_else(|| ApplicationError::Validation("Missing repo".into()))?;
+
+        let opp = opp_repo.find_by_id(cmd.opportunity_id).await?.ok_or(StorageError::UserNotFound)?;
+        let role = company_repo.get_user_role(opp.company_id, employer_user_id).await?
+            .ok_or_else(|| ApplicationError::Unauthorized("Not authorized for this company".into()))?;
+
+        if !role.can_manage_opportunities() {
+            return Err(ApplicationError::Unauthorized("Insufficient permissions to invite candidates".into()));
+        }
+
+        let inv_id = self.candidate_repo.send_invitation(
+            cmd.opportunity_id,
+            candidate_id,
+            opp.company_id,
+            employer_user_id,
+            cmd.message.as_deref(),
+        ).await?;
+
+        Ok(inv_id)
+    }
+
     pub async fn add_experience(&self, user_id: Uuid, cmd: AddExperienceCommand) -> Result<Uuid, ApplicationError> {
         let candidate = self.candidate_repo.find_by_user_id(user_id).await?.ok_or(StorageError::UserNotFound)?;
         let exp = CandidateExperience {
@@ -265,7 +382,6 @@ impl CandidateUseCases {
         Ok(())
     }
 
-    // سوابق تحصیلی
     pub async fn add_education(&self, user_id: Uuid, cmd: AddEducationCommand) -> Result<Uuid, ApplicationError> {
         let candidate = self.candidate_repo.find_by_user_id(user_id).await?.ok_or(StorageError::UserNotFound)?;
         let edu = CandidateEducation {
@@ -289,7 +405,6 @@ impl CandidateUseCases {
         Ok(())
     }
 
-    // زبان‌های خارجی
     pub async fn add_language(&self, user_id: Uuid, cmd: AddLanguageCommand) -> Result<Uuid, ApplicationError> {
         let candidate = self.candidate_repo.find_by_user_id(user_id).await?.ok_or(StorageError::UserNotFound)?;
         let lang = CandidateLanguage {
@@ -308,7 +423,6 @@ impl CandidateUseCases {
         Ok(())
     }
 
-    // معرف‌ها و همکاران سابق
     pub async fn add_reference(&self, user_id: Uuid, cmd: AddReferenceCommand) -> Result<Uuid, ApplicationError> {
         let candidate = self.candidate_repo.find_by_user_id(user_id).await?.ok_or(StorageError::UserNotFound)?;
         let r = CandidateReference {
@@ -333,7 +447,6 @@ impl CandidateUseCases {
         Ok(())
     }
 
-    // رزومه‌ها
     pub async fn add_resume(&self, user_id: Uuid, cmd: AddResumeCommand) -> Result<Uuid, ApplicationError> {
         let candidate = self.candidate_repo.find_by_user_id(user_id).await?.ok_or(StorageError::UserNotFound)?;
         let res = CandidateResume {

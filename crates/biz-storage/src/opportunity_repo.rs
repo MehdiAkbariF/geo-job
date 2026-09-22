@@ -137,6 +137,28 @@ impl OpportunityRepository {
         row.map(|r| r.to_domain()).transpose()
     }
 
+    // واکشی مختصات اولین شعبه فیزیکی شغل برای محاسبه مسافت تردد کارجو
+    pub async fn get_first_location_coords(&self, opp_id: Uuid) -> Result<Option<(f64, f64)>, StorageError> {
+        let sql = r#"
+            SELECT 
+                ST_X(loc.coordinates::geometry) AS longitude,
+                ST_Y(loc.coordinates::geometry) AS latitude
+            FROM opportunity_locations ol
+            INNER JOIN locations loc ON loc.id = ol.location_id
+            WHERE ol.opportunity_id = $1
+            LIMIT 1
+        "#;
+
+        #[derive(sqlx::FromRow)]
+        struct CoordsRow {
+            longitude: f64,
+            latitude: f64,
+        }
+
+        let row: Option<CoordsRow> = sqlx::query_as(sql).bind(opp_id).fetch_optional(&self.pool).await?;
+        Ok(row.map(|r| (r.longitude, r.latitude)))
+    }
+
     pub async fn list_by_company(&self, company_id: Uuid, only_published: bool) -> Result<Vec<Opportunity>, StorageError> {
         let sql = if only_published {
             "SELECT * FROM opportunities WHERE company_id = $1 AND status = 'published' AND (expires_at IS NULL OR expires_at > NOW()) ORDER BY published_at DESC"

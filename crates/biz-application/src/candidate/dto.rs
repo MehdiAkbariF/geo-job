@@ -1,7 +1,7 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
@@ -13,6 +13,7 @@ pub struct UpdateProfileCommand {
     pub preferred_city: Option<String>,
     pub residence_location_id: Option<Uuid>,
     pub preferred_commute_radius_meters: Option<i32>,
+    pub show_exact_location_to_employers: Option<bool>,
     pub is_foreign_national: Option<bool>,
     pub nationality_country_code: Option<String>,
     pub has_disability: Option<bool>,
@@ -165,6 +166,7 @@ pub struct CandidateProfileDto {
     pub preferred_city: Option<String>,
     pub residence_location_id: Option<Uuid>,
     pub preferred_commute_radius_meters: Option<i32>,
+    pub show_exact_location_to_employers: bool,
     pub is_foreign_national: bool,
     pub nationality_country_code: Option<String>,
     pub has_disability: bool,
@@ -213,4 +215,27 @@ pub struct TrackedApplicationDto {
     pub opportunity_id: Uuid,
     pub status: String,
     pub created_at: DateTime<Utc>,
+}
+
+/// دستور ارسال دعوت‌نامه رسمی کارفرما به کارجو
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct SendInvitationCommand {
+    #[schema(value_type = String, format = Uuid)]
+    pub opportunity_id: Uuid,
+    pub message: Option<String>,
+}
+
+/// فیلترهای نقشه و دیسکاوری استعدادها برای کارفرما
+#[derive(Debug, Clone, Deserialize, Default, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct SearchTalentsRequest {
+    pub q: Option<String>,
+    pub skill_ids: Option<String>,
+    pub city: Option<String>,
+    pub actively_looking_only: Option<bool>,
+    pub bbox: Option<String>,
+    pub lat: Option<f64>,
+    pub lon: Option<f64>,
+    pub radius_meters: Option<f64>,
+    pub limit: Option<usize>,
 }

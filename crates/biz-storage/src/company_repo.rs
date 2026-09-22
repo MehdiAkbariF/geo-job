@@ -42,6 +42,15 @@ impl CompanyDbRow {
     }
 }
 
+#[derive(Debug, sqlx::FromRow)]
+pub struct CompanyLocationDbRow {
+    pub location_id: Uuid,
+    pub address_summary: Option<String>,
+    pub longitude: f64,
+    pub latitude: f64,
+    pub is_headquarters: bool,
+}
+
 #[derive(Clone)]
 pub struct CompanyRepository {
     pool: PgPool,
@@ -60,8 +69,8 @@ impl CompanyRepository {
         let mut tx = self.pool.begin().await?;
 
         let comp_sql = r#"
-            INSERT INTO companies (name, slug, description, website)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO companies (name, slug, description, website, verification_status)
+            VALUES ($1, $2, $3, $4, 'pending')
             RETURNING id, name, slug, description, logo_storage_key, website, verification_status, created_at, updated_at
         "#;
 
@@ -110,6 +119,53 @@ impl CompanyRepository {
         Ok((company, membership))
     }
 
+    pub async fn list_user_companies(&self, user_id: Uuid) -> Result<Vec<(Company, CompanyRole)>, StorageError> {
+        #[derive(sqlx::FromRow)]
+        struct UserCompanyDbRow {
+            pub id: Uuid,
+            pub name: String,
+            pub slug: String,
+            pub description: Option<String>,
+            pub logo_storage_key: Option<String>,
+            pub website: Option<String>,
+            pub verification_status: String,
+            pub created_at: DateTime<Utc>,
+            pub updated_at: DateTime<Utc>,
+            pub role: String,
+        }
+
+        let sql = r#"
+            SELECT 
+                c.id, c.name, c.slug, c.description, c.logo_storage_key, c.website,
+                c.verification_status, c.created_at, c.updated_at, cm.role
+            FROM companies c
+            INNER JOIN company_memberships cm ON cm.company_id = c.id
+            WHERE cm.user_id = $1
+            ORDER BY cm.created_at ASC
+        "#;
+
+        let rows = sqlx::query_as::<_, UserCompanyDbRow>(sql)
+            .bind(user_id)
+            .fetch_all(&self.pool)
+            .await?;
+
+        Ok(rows.into_iter().filter_map(|r| {
+            let role = CompanyRole::from_str(&r.role)?;
+            let comp = CompanyDbRow {
+                id: r.id,
+                name: r.name,
+                slug: r.slug,
+                description: r.description,
+                logo_storage_key: r.logo_storage_key,
+                website: r.website,
+                verification_status: r.verification_status,
+                created_at: r.created_at,
+                updated_at: r.updated_at,
+            }.to_domain();
+            Some((comp, role))
+        }).collect())
+    }
+
     pub async fn update_company(
         &self,
         company_id: Uuid,
@@ -146,13 +202,21 @@ impl CompanyRepository {
 
     pub async fn find_by_id(&self, company_id: Uuid) -> Result<Option<Company>, StorageError> {
         let sql = "SELECT * FROM companies WHERE id = $1";
-        let row: Option<CompanyDbRow> = sqlx::query_as(sql).bind(company_id).fetch_optional(&self.pool).await?;
+        let row: Option<CompanyDbRow> = sqlx::query_as(sql)
+            .bind(company_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
         Ok(row.map(CompanyDbRow::to_domain))
     }
 
     pub async fn find_by_slug(&self, slug: &str) -> Result<Option<Company>, StorageError> {
         let sql = "SELECT * FROM companies WHERE LOWER(slug) = LOWER($1)";
-        let row: Option<CompanyDbRow> = sqlx::query_as(sql).bind(slug).fetch_optional(&self.pool).await?;
+        let row: Option<CompanyDbRow> = sqlx::query_as(sql)
+            .bind(slug)
+            .fetch_optional(&self.pool)
+            .await?;
+
         Ok(row.map(CompanyDbRow::to_domain))
     }
 
@@ -170,6 +234,23 @@ impl CompanyRepository {
         "#;
         sqlx::query(sql).bind(company_id).bind(location_id).bind(is_headquarters).execute(&self.pool).await?;
         Ok(())
+    }
+
+    pub async fn list_company_locations(&self, company_id: Uuid) -> Result<Vec<CompanyLocationDbRow>, StorageError> {
+        let sql = r#"
+            SELECT 
+                cl.location_id,
+                loc.address_summary,
+                ST_X(loc.coordinates::geometry) AS longitude,
+                ST_Y(loc.coordinates::geometry) AS latitude,
+                cl.is_headquarters
+            FROM company_locations cl
+            INNER JOIN locations loc ON loc.id = cl.location_id
+            WHERE cl.company_id = $1
+            ORDER BY cl.is_headquarters DESC, cl.created_at ASC
+        "#;
+        let rows = sqlx::query_as::<_, CompanyLocationDbRow>(sql).bind(company_id).fetch_all(&self.pool).await?;
+        Ok(rows)
     }
 
     pub async fn list_members(&self, company_id: Uuid) -> Result<Vec<CompanyMembership>, StorageError> {

@@ -50,7 +50,11 @@ impl AppState {
         );
         let opp_use_cases = OpportunityUseCases::new(opp_repo.clone(), company_repo.clone());
         let discovery_use_cases = DiscoveryUseCases::new(discovery_repo, candidate_repo.clone());
-        let candidate_use_cases = CandidateUseCases::new(candidate_repo.clone(), app_repo.clone());
+        
+        // اتصال یوزکیس کارجو به مخازن کارفرما برای قابلیت شکار استعداد و ارسال دعوت‌نامه
+        let candidate_use_cases = CandidateUseCases::new(candidate_repo.clone(), app_repo.clone())
+            .with_employer_repos(company_repo.clone(), opp_repo.clone());
+            
         let app_use_cases = ApplicationUseCases::new(
             app_repo,
             opp_repo.clone(),
@@ -58,8 +62,8 @@ impl AppState {
             company_repo.clone(),
         );
         let saved_use_cases = SavedUseCases::new(saved_repo, candidate_repo.clone());
-        let gov_use_cases = GovernanceUseCases::new(gov_repo, company_repo.clone());
-        let company_use_cases = CompanyUseCases::new(company_repo, opp_repo);
+        let gov_use_cases = GovernanceUseCases::new(gov_repo.clone(), company_repo.clone());
+        let company_use_cases = CompanyUseCases::new(company_repo, opp_repo, gov_repo);
         let taxonomy_use_cases = TaxonomyUseCases::new(taxonomy_repo);
 
         Self {

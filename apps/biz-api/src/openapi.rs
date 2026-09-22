@@ -3,7 +3,7 @@ use utoipa::OpenApi;
 use crate::handlers::auth::RefreshTokenRequest;
 use crate::handlers::taxonomy::SkillQuery;
 use biz_application::application::{
-    ApplicationDossierDto, ApplicationDto, ChangeApplicationStatusCommand,
+    ApplicantSummaryDto, ApplicationDossierDto, ApplicationDto, ChangeApplicationStatusCommand,
     SubmitApplicationCommand,
 };
 use biz_application::candidate::{
@@ -12,9 +12,10 @@ use biz_application::candidate::{
     LanguageDto, ReferenceDto, ResumeDto, SetSkillsCommand, SkillDto, TrackedApplicationDto,
     UpdateProfileCommand,
 };
+
 use biz_application::company::{
-    AddCompanyLocationCommand, AddMemberCommand, CompanyDto, CompanyMemberDto,
-    CreateCompanyCommand, UpdateCompanyCommand,
+    AddCompanyLocationCommand, AddMemberCommand, CompanyDto, CompanyLocationDto,
+    CompanyMemberDto, CreateCompanyCommand, UpdateCompanyCommand,
 };
 use biz_application::discovery::{GetMapPinsRequest, SearchOpportunitiesRequest};
 use biz_application::governance::{

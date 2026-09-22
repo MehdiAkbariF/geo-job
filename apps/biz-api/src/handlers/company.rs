@@ -7,13 +7,44 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+use biz_application::application::ApplicantSummaryDto;
 use biz_application::company::{
-    AddCompanyLocationCommand, AddMemberCommand, CompanyDto, CompanyMemberDto,
-    CreateCompanyCommand, UpdateCompanyCommand,
+    AddCompanyLocationCommand, AddMemberCommand, CompanyDto, CompanyLocationDto,
+    CompanyMemberDto, CreateCompanyCommand, OnboardCompanyCommand, UpdateCompanyCommand,
+    UserCompanyMembershipDto,
 };
-use biz_domain::application::Application;
 use biz_domain::opportunity::Opportunity;
 use uuid::Uuid;
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/companies/onboard",
+    request_body = OnboardCompanyCommand,
+    responses((status = 201, description = "Employer onboarded and verification submitted", body = CompanyDto)),
+    tag = "Companies"
+)]
+pub async fn onboard_company_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(cmd): Json<OnboardCompanyCommand>,
+) -> Result<impl IntoResponse, ApiError> {
+    let company = state.company_use_cases.onboard_company(auth.user_id, cmd).await?;
+    Ok((StatusCode::CREATED, Json(company)))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/me/companies",
+    responses((status = 200, description = "List all companies the authenticated user belongs to", body = Vec<UserCompanyMembershipDto>)),
+    tag = "Companies"
+)]
+pub async fn list_my_companies_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+) -> Result<impl IntoResponse, ApiError> {
+    let list = state.company_use_cases.list_my_companies(auth.user_id).await?;
+    Ok(Json(list))
+}
 
 #[utoipa::path(
     post,
@@ -81,6 +112,20 @@ pub async fn add_company_location_handler(
 
 #[utoipa::path(
     get,
+    path = "/api/v1/companies/{id}/locations",
+    responses((status = 200, description = "List company physical branch locations", body = Vec<CompanyLocationDto>)),
+    tag = "Companies"
+)]
+pub async fn list_company_locations_handler(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    let list = state.company_use_cases.list_locations(id).await?;
+    Ok(Json(list))
+}
+
+#[utoipa::path(
+    get,
     path = "/api/v1/companies/{id}/members",
     responses((status = 200, description = "List company team members", body = Vec<CompanyMemberDto>)),
     tag = "Companies"
@@ -143,7 +188,7 @@ pub async fn list_public_company_opportunities_handler(
 #[utoipa::path(
     get,
     path = "/api/v1/opportunities/{id}/applications",
-    responses((status = 200, description = "List applicants for this opportunity", body = Vec<Application>)),
+    responses((status = 200, description = "List applicants with candidate summary", body = Vec<ApplicantSummaryDto>)),
     tag = "Employer ATS"
 )]
 pub async fn list_opportunity_applicants_handler(

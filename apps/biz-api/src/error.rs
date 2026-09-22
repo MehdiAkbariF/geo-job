@@ -4,6 +4,7 @@ use axum::{
     Json,
 };
 use biz_application::ApplicationError;
+use biz_domain::DomainError;
 use biz_storage::StorageError;
 use serde::Serialize;
 use uuid::Uuid;
@@ -40,17 +41,20 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let request_id = Uuid::new_v4().to_string();
 
-        // لاگ جامع خطا در کنسول برای دیباگ دقیق
         tracing::error!(request_id = %request_id, error = ?self, "API Error encountered");
 
         let (status, code, message) = match self {
             ApiError::Application(ApplicationError::Validation(msg))
             | ApiError::Validation(msg) => (StatusCode::BAD_REQUEST, "VALIDATION_ERROR", msg),
             
+            // رفع ارور ۵۰۰: تبدیل خطاهای دامنه (مثل تغییر مرحله نامعتبر) به ۴۰۰
+            ApiError::Application(ApplicationError::Domain(DomainError::InvariantViolation(msg))) => {
+                (StatusCode::BAD_REQUEST, "INVALID_STATE_TRANSITION", msg)
+            }
+
             ApiError::Application(ApplicationError::Unauthorized(msg))
             | ApiError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, "UNAUTHORIZED", msg),
             
-            // پوشش کامل حالت‌های رمز اشتباه و عدم احراز هویت
             ApiError::Application(ApplicationError::Storage(StorageError::InvalidCredentials))
             | ApiError::Storage(StorageError::InvalidCredentials) => (
                 StatusCode::UNAUTHORIZED,

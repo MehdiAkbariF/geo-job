@@ -1,7 +1,7 @@
 use crate::error::StorageError;
 use biz_domain::candidate::{
     Candidate, CandidateEducation, CandidateExperience, CandidateLanguage, CandidateReference,
-    CandidateResume,
+    CandidateResume, JobInvitation, TalentSearchResult,
 };
 use biz_domain::saved::CandidatePreferences;
 use chrono::{DateTime, NaiveDate, Utc};
@@ -22,6 +22,7 @@ struct CandidateDbRow {
     preferred_city: Option<String>,
     preferred_commute_center_id: Option<Uuid>,
     preferred_commute_radius_meters: Option<i32>,
+    show_exact_location_to_employers: Option<bool>,
     is_foreign_national: bool,
     nationality_country_code: Option<String>,
     has_disability: bool,
@@ -60,6 +61,7 @@ impl CandidateDbRow {
             preferred_city: self.preferred_city,
             preferred_commute_center_id: self.preferred_commute_center_id,
             preferred_commute_radius_meters: self.preferred_commute_radius_meters,
+            show_exact_location_to_employers: self.show_exact_location_to_employers.unwrap_or(false),
             is_foreign_national: self.is_foreign_national,
             nationality_country_code: self.nationality_country_code,
             has_disability: self.has_disability,
@@ -184,11 +186,21 @@ impl CandidateRepository {
         Ok(row.map(CandidateDbRow::to_domain))
     }
 
+    pub async fn find_by_id(&self, candidate_id: Uuid) -> Result<Option<Candidate>, StorageError> {
+        let sql = "SELECT * FROM candidates WHERE id = $1";
+        let row: Option<CandidateDbRow> = sqlx::query_as(sql)
+            .bind(candidate_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        Ok(row.map(CandidateDbRow::to_domain))
+    }
+
     pub async fn upsert_profile(&self, item: &Candidate) -> Result<Candidate, StorageError> {
         let sql = r#"
             INSERT INTO candidates (
                 user_id, first_name, last_name, headline, bio, preferred_city,
-                residence_location_id, preferred_commute_radius_meters,
+                residence_location_id, preferred_commute_radius_meters, show_exact_location_to_employers,
                 is_foreign_national, nationality_country_code, has_disability, disability_type,
                 gender, military_service_status, marital_status, birth_date, preferred_category_ids,
                 linkedin_url, github_url, website_url, audio_intro_storage_key, job_search_status,
@@ -197,7 +209,7 @@ impl CandidateRepository {
             )
             VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
-                $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, NOW()
+                $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, NOW()
             )
             ON CONFLICT (user_id) DO UPDATE SET
                 first_name = EXCLUDED.first_name,
@@ -207,6 +219,7 @@ impl CandidateRepository {
                 preferred_city = EXCLUDED.preferred_city,
                 residence_location_id = EXCLUDED.residence_location_id,
                 preferred_commute_radius_meters = EXCLUDED.preferred_commute_radius_meters,
+                show_exact_location_to_employers = EXCLUDED.show_exact_location_to_employers,
                 is_foreign_national = EXCLUDED.is_foreign_national,
                 nationality_country_code = EXCLUDED.nationality_country_code,
                 has_disability = EXCLUDED.has_disability,
@@ -240,6 +253,7 @@ impl CandidateRepository {
             .bind(&item.preferred_city)
             .bind(item.residence_location_id)
             .bind(item.preferred_commute_radius_meters)
+            .bind(item.show_exact_location_to_employers)
             .bind(item.is_foreign_national)
             .bind(&item.nationality_country_code)
             .bind(item.has_disability)
@@ -438,7 +452,6 @@ impl CandidateRepository {
             .collect())
     }
 
-    // سوابق تحصیلی
     pub async fn add_education(&self, edu: &CandidateEducation) -> Result<Uuid, StorageError> {
         let sql = r#"
             INSERT INTO candidate_educations (
@@ -498,7 +511,6 @@ impl CandidateRepository {
             .collect())
     }
 
-    // زبان‌های خارجی
     pub async fn add_language(&self, lang: &CandidateLanguage) -> Result<Uuid, StorageError> {
         let sql = "INSERT INTO candidate_languages (candidate_id, language_name, proficiency_level) VALUES ($1, $2, $3) RETURNING id";
         let id: Uuid = sqlx::query_scalar(sql)
@@ -531,7 +543,6 @@ impl CandidateRepository {
         }).collect())
     }
 
-    // معرف‌ها و همکاران سابق
     pub async fn add_reference(&self, ref_item: &CandidateReference) -> Result<Uuid, StorageError> {
         let sql = r#"
             INSERT INTO candidate_references (
@@ -583,7 +594,6 @@ impl CandidateRepository {
         }).collect())
     }
 
-    // رزومه‌ها
     pub async fn add_resume(&self, res: &CandidateResume) -> Result<Uuid, StorageError> {
         let sql = r#"
             INSERT INTO candidate_resumes (candidate_id, storage_key, filename, mime_type, file_size)
@@ -638,7 +648,10 @@ impl CandidateRepository {
         }
 
         let sql = "SELECT * FROM candidate_preferences WHERE candidate_id = $1";
-        let row: Option<PrefsDbRow> = sqlx::query_as(sql).bind(candidate_id).fetch_optional(&self.pool).await?;
+        let row: Option<PrefsDbRow> = sqlx::query_as(sql)
+            .bind(candidate_id)
+            .fetch_optional(&self.pool)
+            .await?;
 
         Ok(row.map(|r| CandidatePreferences {
             candidate_id: r.candidate_id,
@@ -686,5 +699,189 @@ impl CandidateRepository {
             .await?;
 
         Ok(())
+    }
+
+    // --- مدیریت دعوت‌نامه‌های رسمی کارفرما به کارجو ---
+    pub async fn send_invitation(
+        &self,
+        opp_id: Uuid,
+        candidate_id: Uuid,
+        company_id: Uuid,
+        sender_id: Uuid,
+        message: Option<&str>,
+    ) -> Result<Uuid, StorageError> {
+        let sql = r#"
+            INSERT INTO job_invitations (opportunity_id, candidate_id, company_id, sender_user_id, message, status)
+            VALUES ($1, $2, $3, $4, $5, 'pending')
+            ON CONFLICT (opportunity_id, candidate_id) DO UPDATE SET
+                message = EXCLUDED.message,
+                updated_at = NOW()
+            RETURNING id
+        "#;
+
+        let id: Uuid = sqlx::query_scalar(sql)
+            .bind(opp_id)
+            .bind(candidate_id)
+            .bind(company_id)
+            .bind(sender_id)
+            .bind(message)
+            .fetch_one(&self.pool)
+            .await?;
+
+        Ok(id)
+    }
+
+    // --- موتور جستجوی استعدادها روی نقشه ویژه کارفرما با حفظ کامل حریم خصوصی ---
+    pub async fn search_talents(
+        &self,
+        q_text: Option<&str>,
+        skill_ids: &[Uuid],
+        city: Option<&str>,
+        actively_looking_only: bool,
+        bbox: Option<&geo_types::BoundingBox>,
+        center_point: Option<&geo_types::GeoPoint>,
+        radius_m: Option<f64>,
+        limit: usize,
+    ) -> Result<Vec<TalentSearchResult>, StorageError> {
+        let (west, south, east, north) = bbox
+            .map(|b| (Some(b.west()), Some(b.south()), Some(b.east()), Some(b.north())))
+            .unwrap_or((None, None, None, None));
+
+        let (c_lon, c_lat) = center_point
+            .map(|p| (Some(p.longitude()), Some(p.latitude())))
+            .unwrap_or((None, None));
+
+        let sql = r#"
+            SELECT 
+                c.id AS candidate_id,
+                c.first_name,
+                c.last_name,
+                c.headline,
+                c.bio,
+                c.preferred_city,
+                c.job_search_status,
+                c.show_exact_location_to_employers,
+                -- رعایت حریم خصوصی: اگر کاربر اجازه داده باشد، مختصات دقیق؛ در غیر این صورت مرکز تقریبی
+                CASE 
+                    WHEN c.show_exact_location_to_employers = true AND loc.coordinates IS NOT NULL THEN
+                        ST_X(loc.coordinates::geometry)
+                    WHEN c.preferred_city = 'تهران' THEN 51.3890 + (random() * 0.04 - 0.02)
+                    WHEN c.preferred_city = 'اصفهان' THEN 51.6660 + (random() * 0.04 - 0.02)
+                    WHEN c.preferred_city = 'مشهد' THEN 59.5700 + (random() * 0.04 - 0.02)
+                    WHEN c.preferred_city = 'شیراز' THEN 52.5200 + (random() * 0.04 - 0.02)
+                    WHEN c.preferred_city = 'تبریز' THEN 46.3600 + (random() * 0.04 - 0.02)
+                    ELSE NULL
+                END AS longitude,
+                CASE 
+                    WHEN c.show_exact_location_to_employers = true AND loc.coordinates IS NOT NULL THEN
+                        ST_Y(loc.coordinates::geometry)
+                    WHEN c.preferred_city = 'تهران' THEN 35.7200 + (random() * 0.04 - 0.02)
+                    WHEN c.preferred_city = 'اصفهان' THEN 32.6546 + (random() * 0.04 - 0.02)
+                    WHEN c.preferred_city = 'مشهد' THEN 36.3000 + (random() * 0.04 - 0.02)
+                    WHEN c.preferred_city = 'شیراز' THEN 29.6350 + (random() * 0.04 - 0.02)
+                    WHEN c.preferred_city = 'تبریز' THEN 38.0500 + (random() * 0.04 - 0.02)
+                    ELSE NULL
+                END AS latitude,
+                COALESCE((
+                    SELECT ARRAY_AGG(s.name)
+                    FROM candidate_skills cs
+                    JOIN skills s ON s.id = cs.skill_id
+                    WHERE cs.candidate_id = c.id
+                ), ARRAY[]::text[]) AS skills,
+                (SELECT COUNT(*)::int4 FROM candidate_educations ce WHERE ce.candidate_id = c.id) AS educations_count,
+                COALESCE((
+                    SELECT SUM(GREATEST(1, COALESCE(ce.end_year, 1403) - ce.start_year))::int4
+                    FROM candidate_experiences ce
+                    WHERE ce.candidate_id = c.id
+                ), 0) AS experience_years,
+                CASE 
+                    WHEN $9::float8 IS NOT NULL AND $10::float8 IS NOT NULL AND loc.coordinates IS NOT NULL THEN
+                        ST_Distance(loc.coordinates::geography, ST_SetSRID(ST_MakePoint($9, $10), 4326)::geography)
+                    ELSE NULL
+                END AS distance_meters
+            FROM candidates c
+            LEFT JOIN locations loc ON loc.id = c.residence_location_id
+            WHERE c.job_search_status != 'not_looking'
+              AND ($1::text IS NULL OR c.headline ILIKE '%' || $1 || '%' OR c.bio ILIKE '%' || $1 || '%')
+              AND ($2::boolean = false OR c.job_search_status = 'actively_looking')
+              AND ($3::text IS NULL OR c.preferred_city ILIKE '%' || $3 || '%')
+              AND (
+                  $4::uuid[] IS NULL OR CARDINALITY($4) = 0 OR
+                  EXISTS (
+                      SELECT 1 FROM candidate_skills cs
+                      WHERE cs.candidate_id = c.id AND cs.skill_id = ANY($4)
+                  )
+              )
+              AND (
+                  $5::float8 IS NULL OR
+                  (loc.coordinates IS NOT NULL AND (loc.coordinates && ST_MakeEnvelope($5, $6, $7, $8, 4326)))
+              )
+              AND (
+                  $11::float8 IS NULL OR
+                  (loc.coordinates IS NOT NULL AND ST_DWithin(loc.coordinates::geography, ST_SetSRID(ST_MakePoint($9, $10), 4326)::geography, $11))
+              )
+            ORDER BY 
+                CASE WHEN c.job_search_status = 'actively_looking' THEN 1 ELSE 2 END ASC,
+                c.updated_at DESC
+            LIMIT $12
+        "#;
+
+        #[derive(sqlx::FromRow)]
+        struct TalentDbRow {
+            candidate_id: Uuid,
+            first_name: String,
+            last_name: String,
+            headline: Option<String>,
+            bio: Option<String>,
+            preferred_city: Option<String>,
+            job_search_status: String,
+            show_exact_location_to_employers: Option<bool>,
+            longitude: Option<f64>,
+            latitude: Option<f64>,
+            skills: Vec<String>,
+            educations_count: i32,
+            experience_years: i32,
+            distance_meters: Option<f64>,
+        }
+
+        let rows = sqlx::query_as::<_, TalentDbRow>(sql)
+            .bind(q_text)
+            .bind(actively_looking_only)
+            .bind(city)
+            .bind(skill_ids)
+            .bind(west)
+            .bind(south)
+            .bind(east)
+            .bind(north)
+            .bind(c_lon)
+            .bind(c_lat)
+            .bind(radius_m)
+            .bind(limit as i64)
+            .fetch_all(&self.pool)
+            .await?;
+
+        Ok(rows.into_iter().map(|r| {
+            let coords = match (r.longitude, r.latitude) {
+                (Some(lon), Some(lat)) => Some([lon, lat]),
+                _ => None,
+            };
+
+            TalentSearchResult {
+                candidate_id: r.candidate_id,
+                first_name: r.first_name,
+                last_name: r.last_name,
+                headline: r.headline,
+                bio: r.bio,
+                preferred_city: r.preferred_city,
+                job_search_status: r.job_search_status,
+                skills: r.skills,
+                coordinates: coords,
+                distance_meters: r.distance_meters,
+                match_score: None,
+                has_exact_location: r.show_exact_location_to_employers.unwrap_or(false),
+                experience_years: r.experience_years,
+                educations_count: r.educations_count as usize,
+            }
+        }).collect())
     }
 }

@@ -44,13 +44,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     run_migrations(&pool).await?;
     tracing::info!("Business migrations applied successfully.");
 
+    // تضمین ۱۰۰٪ هش معتبر برای تمام کاربران تستی (کارجو و کارفرمایان)
     if let Ok(raw_pass) = biz_domain::identity::RawPassword::new("Password1234!") {
         if let Ok(real_hash) = biz_storage::PasswordService::hash_password(&raw_pass) {
-            let _ = sqlx::query("UPDATE users SET password_hash = $1 WHERE email = 'demo@geojob.ir'")
+            let _ = sqlx::query("UPDATE users SET password_hash = $1 WHERE email IN ('demo@geojob.ir', 'employer@geojob.ir', 'verified_employer@geojob.ir', 'pending_employer@geojob.ir')")
                 .bind(real_hash)
                 .execute(&pool)
                 .await;
-            tracing::info!("Verified cryptographic Argon2id password hash for demo@geojob.ir");
+            tracing::info!("Verified cryptographic Argon2id password hash for all demo users");
         }
     }
 
@@ -66,6 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/auth/refresh", post(handlers::auth::refresh_handler))
         .route("/auth/logout", post(handlers::auth::logout_handler))
         .route("/me", get(handlers::auth::me_handler))
+        .route("/me/companies", get(handlers::company::list_my_companies_handler))
         
         // Candidate Profile, Experience, Education, Languages, References & Resumes
         .route("/candidates/me", get(handlers::candidate::get_my_profile_handler).put(handlers::candidate::update_my_profile_handler))
@@ -83,10 +85,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/candidates/me/preferences", get(handlers::candidate::get_preferences_handler).put(handlers::candidate::set_preferences_handler))
         .route("/candidates/me/applications", get(handlers::candidate::list_my_applications_handler))
 
-        // Companies Management & Showcase
+        // Headhunting & Talent Map for Employers
+        .route("/talents/search", get(handlers::candidate::search_talents_handler))
+        .route("/opportunities/:id/matched-candidates", get(handlers::candidate::get_matched_candidates_handler))
+        .route("/candidates/:id/invite", post(handlers::candidate::invite_candidate_handler))
+
+        // Companies Management, Onboarding, Showcase & Branches
+        .route("/companies/onboard", post(handlers::company::onboard_company_handler))
         .route("/companies", post(handlers::company::create_company_handler))
         .route("/companies/:id", get(handlers::company::get_company_handler).put(handlers::company::update_company_handler))
-        .route("/companies/:id/locations", post(handlers::company::add_company_location_handler))
+        .route("/companies/:id/locations", post(handlers::company::add_company_location_handler).get(handlers::company::list_company_locations_handler))
         .route("/companies/:id/members", get(handlers::company::list_members_handler).post(handlers::company::add_member_handler))
         .route("/companies/:id/opportunities", get(handlers::company::list_company_opportunities_handler).post(handlers::opportunity::create_opportunity_handler))
         .route("/companies/:id/public-opportunities", get(handlers::company::list_public_company_opportunities_handler))

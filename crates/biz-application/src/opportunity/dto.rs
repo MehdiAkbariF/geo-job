@@ -6,7 +6,8 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct CreateOpportunityCommand {
-    #[schema(value_type = String, format = Uuid)]
+    #[serde(default)]
+    #[schema(value_type = Option<String>, format = Uuid)]
     pub company_id: Uuid,
     pub title: String,
     pub description: String,
