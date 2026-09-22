@@ -252,10 +252,9 @@ impl CandidateUseCases {
         self.get_full_profile(user_id).await
     }
 
-    // --- جستجوی استعدادها روی نقشه ویژه کارفرما با گیت احراز هویت شرکت ---
     pub async fn search_talents_for_employer(
         &self,
-        employer_user_id: Uuid,
+        _employer_user_id: Uuid,
         req: SearchTalentsRequest,
     ) -> Result<Vec<TalentSearchResult>, ApplicationError> {
         let skill_ids: Vec<Uuid> = req.skill_ids
@@ -289,20 +288,20 @@ impl CandidateUseCases {
             bbox.as_ref(),
             point.as_ref(),
             req.radius_meters,
-            req.limit.unwrap_or(50),
+            req.opportunity_id,
+            req.limit.unwrap_or(60),
         ).await?;
 
         Ok(results)
     }
 
-    // --- رزومه‌های پیشنهادی و منطبق بر یک آگهی شغلی خاص برای کارفرما ---
     pub async fn get_matched_talents_for_opportunity(
         &self,
-        employer_user_id: Uuid,
+        _employer_user_id: Uuid,
         opportunity_id: Uuid,
     ) -> Result<Vec<TalentSearchResult>, ApplicationError> {
         let opp_repo = self.opp_repo.as_ref().ok_or_else(|| ApplicationError::Validation("Missing repo".into()))?;
-        let opp = opp_repo.find_by_id(opportunity_id).await?.ok_or(StorageError::UserNotFound)?;
+        let _opp = opp_repo.find_by_id(opportunity_id).await?.ok_or(StorageError::UserNotFound)?;
 
         let opp_coords = opp_repo.get_first_location_coords(opportunity_id).await?;
         let center = match opp_coords {
@@ -317,14 +316,14 @@ impl CandidateUseCases {
             false,
             None,
             center.as_ref(),
-            Some(20000.0), // شعاع ۲۰ کیلومتری پیرامون محل آگهی
-            30,
+            Some(25000.0),
+            Some(opportunity_id),
+            40,
         ).await?;
 
         Ok(results)
     }
 
-    // --- ارسال دعوت‌نامه رسمی کارفرما به کارجو ---
     pub async fn send_job_invitation(
         &self,
         employer_user_id: Uuid,

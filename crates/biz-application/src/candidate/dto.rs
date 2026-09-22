@@ -217,7 +217,6 @@ pub struct TrackedApplicationDto {
     pub created_at: DateTime<Utc>,
 }
 
-/// دستور ارسال دعوت‌نامه رسمی کارفرما به کارجو
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct SendInvitationCommand {
     #[schema(value_type = String, format = Uuid)]
@@ -238,4 +237,5 @@ pub struct SearchTalentsRequest {
     pub lon: Option<f64>,
     pub radius_meters: Option<f64>,
     pub limit: Option<usize>,
+    pub opportunity_id: Option<Uuid>,
 }

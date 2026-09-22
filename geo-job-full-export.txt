@@ -1,0 +1,259 @@
+============================================================
+GEO-JOB PROJECT FULL EXPORT
+============================================================
+
+Project Root:
+C:\Users\Raven\geo-job
+
+Generated:
+2026-09-22 15:06:41
+
+============================================================
+
+############################
+# PROJECT TREE
+############################
+
+geo-job
+├── apps
+│   ├── biz-api
+│   │   ├── src
+│   │   │   ├── extractors
+│   │   │   │   ├── auth.rs
+│   │   │   │   └── mod.rs
+│   │   │   ├── handlers
+│   │   │   │   ├── application.rs
+│   │   │   │   ├── auth.rs
+│   │   │   │   ├── candidate.rs
+│   │   │   │   ├── company.rs
+│   │   │   │   ├── discovery.rs
+│   │   │   │   ├── governance.rs
+│   │   │   │   ├── mod.rs
+│   │   │   │   ├── opportunity.rs
+│   │   │   │   ├── saved.rs
+│   │   │   │   └── taxonomy.rs
+│   │   │   ├── error.rs
+│   │   │   ├── main.rs
+│   │   │   ├── openapi.rs
+│   │   │   └── state.rs
+│   │   └── Cargo.toml
+│   ├── geo-importer
+│   │   ├── src
+│   │   │   ├── cli.rs
+│   │   │   ├── error.rs
+│   │   │   ├── main.rs
+│   │   │   ├── osm_parser.rs
+│   │   │   ├── pipeline.rs
+│   │   │   └── seeder.rs
+│   │   └── Cargo.toml
+│   └── map-api
+│       ├── src
+│       │   ├── dto
+│       │   │   ├── mod.rs
+│       │   │   └── requests.rs
+│       │   ├── handlers
+│       │   │   ├── geocoding.rs
+│       │   │   ├── health.rs
+│       │   │   ├── locations.rs
+│       │   │   ├── map.rs
+│       │   │   ├── mod.rs
+│       │   │   └── tiles.rs
+│       │   ├── error.rs
+│       │   ├── main.rs
+│       │   ├── openapi.rs
+│       │   └── state.rs
+│       └── Cargo.toml
+├── crates
+│   ├── biz-application
+│   │   ├── src
+│   │   │   ├── application
+│   │   │   │   ├── dto.rs
+│   │   │   │   ├── mod.rs
+│   │   │   │   └── use_cases.rs
+│   │   │   ├── candidate
+│   │   │   │   ├── dto.rs
+│   │   │   │   ├── mod.rs
+│   │   │   │   └── use_cases.rs
+│   │   │   ├── company
+│   │   │   │   ├── dto.rs
+│   │   │   │   ├── mod.rs
+│   │   │   │   └── use_cases.rs
+│   │   │   ├── discovery
+│   │   │   │   ├── dto.rs
+│   │   │   │   ├── mod.rs
+│   │   │   │   └── use_cases.rs
+│   │   │   ├── governance
+│   │   │   │   ├── dto.rs
+│   │   │   │   ├── mod.rs
+│   │   │   │   └── use_cases.rs
+│   │   │   ├── identity
+│   │   │   │   ├── auth_use_cases.rs
+│   │   │   │   ├── dto.rs
+│   │   │   │   └── mod.rs
+│   │   │   ├── opportunity
+│   │   │   │   ├── dto.rs
+│   │   │   │   ├── mod.rs
+│   │   │   │   └── use_cases.rs
+│   │   │   ├── saved
+│   │   │   │   ├── dto.rs
+│   │   │   │   ├── mod.rs
+│   │   │   │   └── use_cases.rs
+│   │   │   ├── taxonomy
+│   │   │   │   ├── mod.rs
+│   │   │   │   └── use_cases.rs
+│   │   │   ├── error.rs
+│   │   │   └── lib.rs
+│   │   └── Cargo.toml
+│   ├── biz-domain
+│   │   ├── src
+│   │   │   ├── application
+│   │   │   │   ├── entity.rs
+│   │   │   │   ├── lifecycle.rs
+│   │   │   │   └── mod.rs
+│   │   │   ├── candidate
+│   │   │   │   ├── entity.rs
+│   │   │   │   └── mod.rs
+│   │   │   ├── company
+│   │   │   │   ├── entity.rs
+│   │   │   │   ├── membership.rs
+│   │   │   │   └── mod.rs
+│   │   │   ├── discovery
+│   │   │   │   ├── mod.rs
+│   │   │   │   ├── query.rs
+│   │   │   │   └── read_model.rs
+│   │   │   ├── governance
+│   │   │   │   ├── audit.rs
+│   │   │   │   ├── mod.rs
+│   │   │   │   ├── moderation.rs
+│   │   │   │   └── verification.rs
+│   │   │   ├── identity
+│   │   │   │   ├── credentials.rs
+│   │   │   │   ├── mod.rs
+│   │   │   │   └── user.rs
+│   │   │   ├── opportunity
+│   │   │   │   ├── entity.rs
+│   │   │   │   ├── lifecycle.rs
+│   │   │   │   └── mod.rs
+│   │   │   ├── saved
+│   │   │   │   ├── entity.rs
+│   │   │   │   └── mod.rs
+│   │   │   ├── taxonomy
+│   │   │   │   ├── category.rs
+│   │   │   │   ├── experience_level.rs
+│   │   │   │   ├── industry.rs
+│   │   │   │   ├── mod.rs
+│   │   │   │   ├── occupation.rs
+│   │   │   │   └── skill.rs
+│   │   │   ├── error.rs
+│   │   │   └── lib.rs
+│   │   └── Cargo.toml
+│   ├── biz-storage
+│   │   ├── src
+│   │   │   ├── application_repo.rs
+│   │   │   ├── candidate_repo.rs
+│   │   │   ├── company_repo.rs
+│   │   │   ├── discovery_repo.rs
+│   │   │   ├── error.rs
+│   │   │   ├── governance_repo.rs
+│   │   │   ├── lib.rs
+│   │   │   ├── opportunity_repo.rs
+│   │   │   ├── saved_repo.rs
+│   │   │   ├── security.rs
+│   │   │   ├── taxonomy_repo.rs
+│   │   │   ├── token_repo.rs
+│   │   │   ├── token_service.rs
+│   │   │   └── user_repo.rs
+│   │   └── Cargo.toml
+│   ├── geo-domain
+│   │   ├── src
+│   │   │   ├── lib.rs
+│   │   │   └── location.rs
+│   │   └── Cargo.toml
+│   ├── geo-geocoding
+│   │   ├── src
+│   │   │   ├── admin_repo.rs
+│   │   │   ├── error.rs
+│   │   │   ├── lib.rs
+│   │   │   ├── models.rs
+│   │   │   └── reverse.rs
+│   │   └── Cargo.toml
+│   ├── geo-presentation
+│   │   ├── src
+│   │   │   ├── cluster.rs
+│   │   │   ├── feature.rs
+│   │   │   ├── lib.rs
+│   │   │   └── marker.rs
+│   │   └── Cargo.toml
+│   ├── geo-query
+│   │   ├── src
+│   │   │   ├── bbox_query.rs
+│   │   │   ├── clustering.rs
+│   │   │   ├── error.rs
+│   │   │   ├── lib.rs
+│   │   │   ├── models.rs
+│   │   │   └── radius_query.rs
+│   │   └── Cargo.toml
+│   ├── geo-storage
+│   │   ├── src
+│   │   │   ├── error.rs
+│   │   │   ├── lib.rs
+│   │   │   ├── models.rs
+│   │   │   └── repository.rs
+│   │   ├── build.rs
+│   │   └── Cargo.toml
+│   ├── geo-tiles
+│   │   ├── src
+│   │   │   ├── lib.rs
+│   │   │   ├── mvt.rs
+│   │   │   └── tile_coord.rs
+│   │   └── Cargo.toml
+│   └── geo-types
+│       ├── src
+│       │   ├── bbox.rs
+│       │   ├── distance.rs
+│       │   ├── error.rs
+│       │   ├── lib.rs
+│       │   └── point.rs
+│       └── Cargo.toml
+├── data
+│   ├── iran-latest.osm.pbf
+│   ├── reset_database.sql
+│   ├── seed_demo_employer.sql
+│   ├── seed_demo_user.sql
+│   ├── seed_production_dataset.sql
+│   └── seed_test_employers.sql
+├── docs
+│   ├── api
+│   │   └── CONTRACTS.md
+│   └── architecture
+│       └── MAP_INFRASTRUCTURE.md
+├── migrations
+│   ├── 20240101000001_init_postgis.sql
+│   ├── 20240101000002_create_locations_table.sql
+│   ├── 20240101000003_create_administrative_areas.sql
+│   ├── 20240101000004_add_source_unique_constraint.sql
+│   ├── 20240101000005_create_osm_roads.sql
+│   ├── 20240101000006_create_identity_tables.sql
+│   ├── 20240101000007_create_company_tables.sql
+│   ├── 20240101000008_create_refresh_tokens_table.sql
+│   ├── 20240101000009_create_taxonomy_tables.sql
+│   ├── 20240101000010_create_opportunity_tables.sql
+│   ├── 20240101000011_create_candidate_tables.sql
+│   ├── 20240101000012_create_application_tables.sql
+│   ├── 20240101000013_create_search_indexes.sql
+│   ├── 20240101000014_create_saved_and_preference_tables.sql
+│   ├── 20240101000015_create_governance_tables.sql
+│   ├── 20240101000016_add_candidate_social_links_and_status.sql
+│   ├── 20240101000017_expand_candidate_profile_schema.sql
+│   ├── 20240101000018_add_location_privacy_and_city_taxonomies.sql
+│   └── 20240101000019_create_job_invitations_and_talent_discovery.sql
+├── web
+│   └── index.html
+├── .gitignore
+├── Cargo.lock
+├── Cargo.toml
+├── docker-compose.yml
+├── geojob.txt
+├── geo-job-full-export.txt
+├── prom
+└── ss

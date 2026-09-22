@@ -379,7 +379,6 @@ impl CandidateRepository {
         Ok(())
     }
 
-    // سوابق شغلی
     pub async fn add_experience(&self, exp: &CandidateExperience) -> Result<Uuid, StorageError> {
         let sql = r#"
             INSERT INTO candidate_experiences (
@@ -634,7 +633,6 @@ impl CandidateRepository {
         }).collect())
     }
 
-    // ترجیحات
     pub async fn get_preferences(&self, candidate_id: Uuid) -> Result<Option<CandidatePreferences>, StorageError> {
         #[derive(sqlx::FromRow)]
         struct PrefsDbRow {
@@ -701,7 +699,6 @@ impl CandidateRepository {
         Ok(())
     }
 
-    // --- مدیریت دعوت‌نامه‌های رسمی کارفرما به کارجو ---
     pub async fn send_invitation(
         &self,
         opp_id: Uuid,
@@ -731,7 +728,7 @@ impl CandidateRepository {
         Ok(id)
     }
 
-    // --- موتور جستجوی استعدادها روی نقشه ویژه کارفرما با حفظ کامل حریم خصوصی ---
+    // --- جستجوی استعدادها روی نقشه ویژه کارفرما با اصلاح ساختاری کامل ORDER BY ---
     pub async fn search_talents(
         &self,
         q_text: Option<&str>,
@@ -741,6 +738,7 @@ impl CandidateRepository {
         bbox: Option<&geo_types::BoundingBox>,
         center_point: Option<&geo_types::GeoPoint>,
         radius_m: Option<f64>,
+        target_opp_id: Option<Uuid>,
         limit: usize,
     ) -> Result<Vec<TalentSearchResult>, StorageError> {
         let (west, south, east, north) = bbox
@@ -752,77 +750,127 @@ impl CandidateRepository {
             .unwrap_or((None, None));
 
         let sql = r#"
+            WITH candidate_base AS (
+                SELECT 
+                    c.id AS candidate_id,
+                    c.first_name,
+                    c.last_name,
+                    c.headline,
+                    c.bio,
+                    c.preferred_city,
+                    c.job_search_status,
+                    COALESCE(c.preferred_commute_radius_meters, 5000) AS commute_radius_meters,
+                    COALESCE(c.show_exact_location_to_employers, false) AS show_exact_location_to_employers,
+                    COALESCE(
+                        loc.coordinates,
+                        CASE 
+                            WHEN c.preferred_city = 'تهران' THEN ST_SetSRID(ST_MakePoint(51.3890, 35.7200), 4326)
+                            WHEN c.preferred_city = 'اصفهان' THEN ST_SetSRID(ST_MakePoint(51.6660, 32.6546), 4326)
+                            WHEN c.preferred_city = 'مشهد' THEN ST_SetSRID(ST_MakePoint(59.5700, 36.3000), 4326)
+                            WHEN c.preferred_city = 'شیراز' THEN ST_SetSRID(ST_MakePoint(52.5200, 29.6350), 4326)
+                            WHEN c.preferred_city = 'تبریز' THEN ST_SetSRID(ST_MakePoint(46.3600, 38.0500), 4326)
+                            WHEN c.preferred_city = 'کرج' THEN ST_SetSRID(ST_MakePoint(50.9900, 35.8300), 4326)
+                            ELSE NULL
+                        END
+                    ) AS base_geom
+                FROM candidates c
+                LEFT JOIN locations loc ON loc.id = c.residence_location_id
+                WHERE c.job_search_status != 'not_looking'
+                  AND ($1::text IS NULL OR c.headline ILIKE '%' || $1 || '%' OR c.bio ILIKE '%' || $1 || '%')
+                  AND ($2::boolean = false OR c.job_search_status = 'actively_looking')
+                  AND ($3::text IS NULL OR c.preferred_city ILIKE '%' || $3 || '%')
+                  AND (
+                      $4::uuid[] IS NULL OR CARDINALITY($4) = 0 OR
+                      EXISTS (
+                          SELECT 1 FROM candidate_skills cs
+                          WHERE cs.candidate_id = c.id AND cs.skill_id = ANY($4)
+                      )
+                  )
+            ),
+            candidate_computed AS (
+                SELECT 
+                    cb.*,
+                    CASE 
+                        WHEN cb.show_exact_location_to_employers = true AND cb.base_geom IS NOT NULL THEN
+                            ST_X(cb.base_geom::geometry)
+                        WHEN cb.base_geom IS NOT NULL THEN
+                            ST_X(cb.base_geom::geometry) + (
+                                ((('x' || substr(md5(cb.candidate_id::text || 'lon'), 1, 4))::bit(16)::int)::float8 / 65535.0 - 0.5) * 0.025
+                            )
+                        ELSE NULL
+                    END AS display_longitude,
+                    CASE 
+                        WHEN cb.show_exact_location_to_employers = true AND cb.base_geom IS NOT NULL THEN
+                            ST_Y(cb.base_geom::geometry)
+                        WHEN cb.base_geom IS NOT NULL THEN
+                            ST_Y(cb.base_geom::geometry) + (
+                                ((('x' || substr(md5(cb.candidate_id::text || 'lat'), 1, 4))::bit(16)::int)::float8 / 65535.0 - 0.5) * 0.025
+                            )
+                        ELSE NULL
+                    END AS display_latitude,
+                    CASE 
+                        WHEN $9::float8 IS NOT NULL AND $10::float8 IS NOT NULL AND cb.base_geom IS NOT NULL THEN
+                            ST_Distance(cb.base_geom::geography, ST_SetSRID(ST_MakePoint($9, $10), 4326)::geography)
+                        ELSE NULL
+                    END AS distance_meters,
+                    CASE WHEN $13::uuid IS NOT NULL THEN
+                        ROUND(
+                            (COALESCE(
+                                (SELECT COUNT(DISTINCT cs.skill_id)::float8 / NULLIF(COUNT(DISTINCT os.skill_id), 0)
+                                 FROM opportunity_skills os
+                                 LEFT JOIN candidate_skills cs ON cs.skill_id = os.skill_id AND cs.candidate_id = cb.candidate_id
+                                 WHERE os.opportunity_id = $13), 0.20
+                            ) * 55.0) +
+                            (CASE 
+                                WHEN ($9::float8 IS NOT NULL AND cb.base_geom IS NOT NULL AND ST_Distance(cb.base_geom::geography, ST_SetSRID(ST_MakePoint($9, $10), 4326)::geography) <= cb.commute_radius_meters) THEN 30.0
+                                WHEN ($9::float8 IS NOT NULL AND cb.base_geom IS NOT NULL AND ST_Distance(cb.base_geom::geography, ST_SetSRID(ST_MakePoint($9, $10), 4326)::geography) <= (cb.commute_radius_meters * 1.5)) THEN 15.0
+                                ELSE 5.0
+                             END) +
+                            (CASE WHEN cb.job_search_status = 'actively_looking' THEN 15.0 ELSE 5.0 END)
+                        )::int2
+                    ELSE NULL END AS match_score
+                FROM candidate_base cb
+                WHERE cb.base_geom IS NOT NULL
+            )
             SELECT 
-                c.id AS candidate_id,
-                c.first_name,
-                c.last_name,
-                c.headline,
-                c.bio,
-                c.preferred_city,
-                c.job_search_status,
-                c.show_exact_location_to_employers,
-                -- رعایت حریم خصوصی: اگر کاربر اجازه داده باشد، مختصات دقیق؛ در غیر این صورت مرکز تقریبی
-                CASE 
-                    WHEN c.show_exact_location_to_employers = true AND loc.coordinates IS NOT NULL THEN
-                        ST_X(loc.coordinates::geometry)
-                    WHEN c.preferred_city = 'تهران' THEN 51.3890 + (random() * 0.04 - 0.02)
-                    WHEN c.preferred_city = 'اصفهان' THEN 51.6660 + (random() * 0.04 - 0.02)
-                    WHEN c.preferred_city = 'مشهد' THEN 59.5700 + (random() * 0.04 - 0.02)
-                    WHEN c.preferred_city = 'شیراز' THEN 52.5200 + (random() * 0.04 - 0.02)
-                    WHEN c.preferred_city = 'تبریز' THEN 46.3600 + (random() * 0.04 - 0.02)
-                    ELSE NULL
-                END AS longitude,
-                CASE 
-                    WHEN c.show_exact_location_to_employers = true AND loc.coordinates IS NOT NULL THEN
-                        ST_Y(loc.coordinates::geometry)
-                    WHEN c.preferred_city = 'تهران' THEN 35.7200 + (random() * 0.04 - 0.02)
-                    WHEN c.preferred_city = 'اصفهان' THEN 32.6546 + (random() * 0.04 - 0.02)
-                    WHEN c.preferred_city = 'مشهد' THEN 36.3000 + (random() * 0.04 - 0.02)
-                    WHEN c.preferred_city = 'شیراز' THEN 29.6350 + (random() * 0.04 - 0.02)
-                    WHEN c.preferred_city = 'تبریز' THEN 38.0500 + (random() * 0.04 - 0.02)
-                    ELSE NULL
-                END AS latitude,
+                cc.candidate_id,
+                cc.first_name,
+                cc.last_name,
+                cc.headline,
+                cc.bio,
+                cc.preferred_city,
+                cc.job_search_status,
+                cc.show_exact_location_to_employers,
+                cc.commute_radius_meters,
+                cc.display_longitude,
+                cc.display_latitude,
+                cc.distance_meters,
+                cc.match_score,
                 COALESCE((
                     SELECT ARRAY_AGG(s.name)
                     FROM candidate_skills cs
                     JOIN skills s ON s.id = cs.skill_id
-                    WHERE cs.candidate_id = c.id
+                    WHERE cs.candidate_id = cc.candidate_id
                 ), ARRAY[]::text[]) AS skills,
-                (SELECT COUNT(*)::int4 FROM candidate_educations ce WHERE ce.candidate_id = c.id) AS educations_count,
+                (SELECT COUNT(*)::int4 FROM candidate_educations ce WHERE ce.candidate_id = cc.candidate_id) AS educations_count,
                 COALESCE((
                     SELECT SUM(GREATEST(1, COALESCE(ce.end_year, 1403) - ce.start_year))::int4
                     FROM candidate_experiences ce
-                    WHERE ce.candidate_id = c.id
-                ), 0) AS experience_years,
-                CASE 
-                    WHEN $9::float8 IS NOT NULL AND $10::float8 IS NOT NULL AND loc.coordinates IS NOT NULL THEN
-                        ST_Distance(loc.coordinates::geography, ST_SetSRID(ST_MakePoint($9, $10), 4326)::geography)
-                    ELSE NULL
-                END AS distance_meters
-            FROM candidates c
-            LEFT JOIN locations loc ON loc.id = c.residence_location_id
-            WHERE c.job_search_status != 'not_looking'
-              AND ($1::text IS NULL OR c.headline ILIKE '%' || $1 || '%' OR c.bio ILIKE '%' || $1 || '%')
-              AND ($2::boolean = false OR c.job_search_status = 'actively_looking')
-              AND ($3::text IS NULL OR c.preferred_city ILIKE '%' || $3 || '%')
-              AND (
-                  $4::uuid[] IS NULL OR CARDINALITY($4) = 0 OR
-                  EXISTS (
-                      SELECT 1 FROM candidate_skills cs
-                      WHERE cs.candidate_id = c.id AND cs.skill_id = ANY($4)
-                  )
-              )
-              AND (
-                  $5::float8 IS NULL OR
-                  (loc.coordinates IS NOT NULL AND (loc.coordinates && ST_MakeEnvelope($5, $6, $7, $8, 4326)))
-              )
-              AND (
-                  $11::float8 IS NULL OR
-                  (loc.coordinates IS NOT NULL AND ST_DWithin(loc.coordinates::geography, ST_SetSRID(ST_MakePoint($9, $10), 4326)::geography, $11))
-              )
+                    WHERE ce.candidate_id = cc.candidate_id
+                ), 0) AS experience_years
+            FROM candidate_computed cc
+            WHERE (
+                $5::float8 IS NULL OR
+                (cc.display_longitude >= $5 AND cc.display_latitude >= $6 AND cc.display_longitude <= $7 AND cc.display_latitude <= $8)
+            )
+            AND (
+                $11::float8 IS NULL OR
+                (cc.distance_meters IS NOT NULL AND cc.distance_meters <= $11)
+            )
             ORDER BY 
-                CASE WHEN c.job_search_status = 'actively_looking' THEN 1 ELSE 2 END ASC,
-                c.updated_at DESC
+                cc.match_score DESC NULLS LAST,
+                CASE WHEN cc.job_search_status = 'actively_looking' THEN 1 ELSE 2 END ASC,
+                cc.distance_meters ASC NULLS LAST
             LIMIT $12
         "#;
 
@@ -835,13 +883,15 @@ impl CandidateRepository {
             bio: Option<String>,
             preferred_city: Option<String>,
             job_search_status: String,
-            show_exact_location_to_employers: Option<bool>,
-            longitude: Option<f64>,
-            latitude: Option<f64>,
+            show_exact_location_to_employers: bool,
+            commute_radius_meters: i32,
+            display_longitude: Option<f64>,
+            display_latitude: Option<f64>,
+            distance_meters: Option<f64>,
+            match_score: Option<i16>,
             skills: Vec<String>,
             educations_count: i32,
             experience_years: i32,
-            distance_meters: Option<f64>,
         }
 
         let rows = sqlx::query_as::<_, TalentDbRow>(sql)
@@ -857,14 +907,30 @@ impl CandidateRepository {
             .bind(c_lat)
             .bind(radius_m)
             .bind(limit as i64)
+            .bind(target_opp_id)
             .fetch_all(&self.pool)
             .await?;
 
         Ok(rows.into_iter().map(|r| {
-            let coords = match (r.longitude, r.latitude) {
+            let coords = match (r.display_longitude, r.display_latitude) {
                 (Some(lon), Some(lat)) => Some([lon, lat]),
                 _ => None,
             };
+
+            let mut match_reasons = Vec::new();
+            if let Some(score) = r.match_score {
+                if score >= 70 {
+                    match_reasons.push("تطابق مهارت‌های تخصصی با نیازمندی موقعیت شغلی".to_string());
+                }
+                if let Some(dist) = r.distance_meters {
+                    if dist <= r.commute_radius_meters as f64 {
+                        match_reasons.push("سکونت در شعاع تردد مجاز تا شرکت".to_string());
+                    }
+                }
+                if r.job_search_status == "actively_looking" {
+                    match_reasons.push("جویای کار فوری و آماده مصاحبه".to_string());
+                }
+            }
 
             TalentSearchResult {
                 candidate_id: r.candidate_id,
@@ -877,8 +943,10 @@ impl CandidateRepository {
                 skills: r.skills,
                 coordinates: coords,
                 distance_meters: r.distance_meters,
-                match_score: None,
-                has_exact_location: r.show_exact_location_to_employers.unwrap_or(false),
+                match_score: r.match_score.map(|s| s.clamp(0, 100) as u8),
+                match_reasons,
+                has_exact_location: r.show_exact_location_to_employers,
+                commute_radius_meters: r.commute_radius_meters,
                 experience_years: r.experience_years,
                 educations_count: r.educations_count as usize,
             }

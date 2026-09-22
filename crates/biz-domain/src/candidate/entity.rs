@@ -140,7 +140,9 @@ pub struct TalentSearchResult {
     pub coordinates: Option<[f64; 2]>,
     pub distance_meters: Option<f64>,
     pub match_score: Option<u8>,
+    pub match_reasons: Vec<String>,
     pub has_exact_location: bool,
+    pub commute_radius_meters: i32,
     pub experience_years: i32,
     pub educations_count: usize,
 }
