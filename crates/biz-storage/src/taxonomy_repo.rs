@@ -1,5 +1,5 @@
 use crate::error::StorageError;
-use biz_domain::taxonomy::{Category, Industry, Occupation, Skill};
+use biz_domain::taxonomy::{Category, CityTaxonomy, Country, Industry, Occupation, Skill};
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -96,29 +96,24 @@ impl TaxonomyRepository {
         Self { pool }
     }
 
-    // Categories
     pub async fn list_categories(&self) -> Result<Vec<Category>, StorageError> {
         let sql = "SELECT id, name, slug, description, created_at, updated_at FROM categories ORDER BY name ASC";
         let rows = sqlx::query_as::<_, CategoryDbRow>(sql).fetch_all(&self.pool).await?;
         Ok(rows.into_iter().map(CategoryDbRow::to_domain).collect())
     }
 
-    // Industries
     pub async fn list_industries(&self) -> Result<Vec<Industry>, StorageError> {
         let sql = "SELECT id, name, slug, description, created_at, updated_at FROM industries ORDER BY name ASC";
         let rows = sqlx::query_as::<_, IndustryDbRow>(sql).fetch_all(&self.pool).await?;
         Ok(rows.into_iter().map(IndustryDbRow::to_domain).collect())
     }
 
-    // Occupations
     pub async fn list_occupations(&self) -> Result<Vec<Occupation>, StorageError> {
         let sql = "SELECT id, name, code, created_at FROM occupations ORDER BY name ASC";
         let rows = sqlx::query_as::<_, OccupationDbRow>(sql).fetch_all(&self.pool).await?;
         Ok(rows.into_iter().map(OccupationDbRow::to_domain).collect())
     }
 
-    // Skills & Alias Resolution
-    /// Resolves an arbitrary skill name or alias to its canonical Skill (Section 27)
     pub async fn resolve_skill(&self, raw_term: &str) -> Result<Option<Skill>, StorageError> {
         let term = raw_term.trim().to_lowercase();
 
@@ -140,5 +135,44 @@ impl TaxonomyRepository {
             .await?;
 
         Ok(skill_row.map(SkillDbRow::to_domain))
+    }
+
+    // لیست رسمی و استاندارد کشورها
+    pub fn list_countries(&self) -> Vec<Country> {
+        vec![
+            Country { code: "IRN".into(), name: "ایران".into(), name_en: "Iran".into() },
+            Country { code: "AFG".into(), name: "افغانستان".into(), name_en: "Afghanistan".into() },
+            Country { code: "IRQ".into(), name: "عراق".into(), name_en: "Iraq".into() },
+            Country { code: "TUR".into(), name: "ترکیه".into(), name_en: "Turkey".into() },
+            Country { code: "PAK".into(), name: "پاکستان".into(), name_en: "Pakistan".into() },
+            Country { code: "SYR".into(), name: "سوریه".into(), name_en: "Syria".into() },
+            Country { code: "DEU".into(), name: "آلمان".into(), name_en: "Germany".into() },
+            Country { code: "CAN".into(), name: "کانادا".into(), name_en: "Canada".into() },
+            Country { code: "ARE".into(), name: "امارات متحده عربی".into(), name_en: "United Arab Emirates".into() },
+            Country { code: "OMN".into(), name: "عمان".into(), name_en: "Oman".into() },
+            Country { code: "QAT".into(), name: "قطر".into(), name_en: "Qatar".into() },
+            Country { code: "RUS".into(), name: "روسیه".into(), name_en: "Russia".into() },
+        ]
+    }
+
+    // لیست شهرهای رسمی به همراه استان و مختصات جغرافیایی
+    pub async fn list_cities(&self) -> Result<Vec<CityTaxonomy>, StorageError> {
+        Ok(vec![
+            CityTaxonomy { id: Uuid::new_v4(), name: "تهران".into(), province: "تهران".into(), center: [51.3890, 35.7200] },
+            CityTaxonomy { id: Uuid::new_v4(), name: "اصفهان".into(), province: "اصفهان".into(), center: [51.6660, 32.6546] },
+            CityTaxonomy { id: Uuid::new_v4(), name: "مشهد".into(), province: "خراسان رضوی".into(), center: [59.5700, 36.3000] },
+            CityTaxonomy { id: Uuid::new_v4(), name: "شیراز".into(), province: "فارس".into(), center: [52.5200, 29.6350] },
+            CityTaxonomy { id: Uuid::new_v4(), name: "تبریز".into(), province: "آذربایجان شرقی".into(), center: [46.3600, 38.0500] },
+            CityTaxonomy { id: Uuid::new_v4(), name: "کرج".into(), province: "البرز".into(), center: [50.9915, 35.8327] },
+            CityTaxonomy { id: Uuid::new_v4(), name: "قم".into(), province: "قم".into(), center: [50.8764, 34.6399] },
+            CityTaxonomy { id: Uuid::new_v4(), name: "اهواز".into(), province: "خوزستان".into(), center: [48.6693, 31.3183] },
+            CityTaxonomy { id: Uuid::new_v4(), name: "رشت".into(), province: "گیلان".into(), center: [49.5832, 37.2808] },
+            CityTaxonomy { id: Uuid::new_v4(), name: "کرمانشاه".into(), province: "کرمانشاه".into(), center: [47.0650, 34.3277] },
+            CityTaxonomy { id: Uuid::new_v4(), name: "یزد".into(), province: "یزد".into(), center: [54.3569, 31.8974] },
+            CityTaxonomy { id: Uuid::new_v4(), name: "ارومیه".into(), province: "آذربایجان غربی".into(), center: [45.0761, 37.5527] },
+            CityTaxonomy { id: Uuid::new_v4(), name: "همدان".into(), province: "همدان".into(), center: [48.5146, 34.7989] },
+            CityTaxonomy { id: Uuid::new_v4(), name: "کرمان".into(), province: "کرمان".into(), center: [57.0788, 30.2839] },
+            CityTaxonomy { id: Uuid::new_v4(), name: "بندرعباس".into(), province: "هرمزگان".into(), center: [56.2808, 27.1832] },
+        ])
     }
 }

@@ -1,5 +1,5 @@
 use crate::error::ApplicationError;
-use biz_domain::taxonomy::{Category, Industry, Occupation, Skill};
+use biz_domain::taxonomy::{Category, CityTaxonomy, Country, Industry, Occupation, Skill};
 use biz_storage::TaxonomyRepository;
 
 #[derive(Clone)]
@@ -26,5 +26,13 @@ impl TaxonomyUseCases {
 
     pub async fn resolve_skill(&self, term: &str) -> Result<Option<Skill>, ApplicationError> {
         Ok(self.repo.resolve_skill(term).await?)
+    }
+
+    pub fn list_countries(&self) -> Vec<Country> {
+        self.repo.list_countries()
+    }
+
+    pub async fn list_cities(&self) -> Result<Vec<CityTaxonomy>, ApplicationError> {
+        Ok(self.repo.list_cities().await?)
     }
 }

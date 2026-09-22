@@ -122,6 +122,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/taxonomies/industries", get(handlers::taxonomy::list_industries_handler))
         .route("/taxonomies/occupations", get(handlers::taxonomy::list_occupations_handler))
         .route("/taxonomies/skills/resolve", get(handlers::taxonomy::resolve_skill_handler))
+        .route("/taxonomies/countries", get(handlers::taxonomy::list_countries_handler))
+        .route("/taxonomies/cities", get(handlers::taxonomy::list_cities_handler))
 
         // Governance, Verification & Reports
         .route("/opportunities/:id/reports", post(handlers::governance::report_opportunity_handler))

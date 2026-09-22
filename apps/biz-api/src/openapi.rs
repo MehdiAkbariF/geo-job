@@ -29,7 +29,7 @@ use biz_domain::application::{Application, ApplicationStatus};
 use biz_domain::discovery::{CompanySummary, MapPinSummary, OpportunitySearchResult, SearchPageResult, SpatialContext};
 use biz_domain::governance::{Report, VerificationStatus};
 use biz_domain::opportunity::{Opportunity, OpportunityStatus, OpportunityType, RemoteScope, Salary, WorkplaceType};
-use biz_domain::taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skill};
+use biz_domain::taxonomy::{Category, CityTaxonomy, Country, ExperienceLevel, Industry, Occupation, Skill};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -105,6 +105,8 @@ use biz_domain::taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skil
         crate::handlers::taxonomy::list_industries_handler,
         crate::handlers::taxonomy::list_occupations_handler,
         crate::handlers::taxonomy::resolve_skill_handler,
+        crate::handlers::taxonomy::list_countries_handler,
+        crate::handlers::taxonomy::list_cities_handler,
 
         // Governance & Trust
         crate::handlers::governance::report_opportunity_handler,
@@ -166,6 +168,8 @@ use biz_domain::taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skil
             Industry,
             Occupation,
             Skill,
+            Country,
+            CityTaxonomy,
             CompanySummary,
             OpportunitySearchResult,
             SearchPageResult,

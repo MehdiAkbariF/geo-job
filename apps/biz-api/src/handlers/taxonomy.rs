@@ -5,7 +5,7 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use biz_domain::taxonomy::{Category, Industry, Occupation, Skill};
+use biz_domain::taxonomy::{Category, CityTaxonomy, Country, Industry, Occupation, Skill};
 use serde::Deserialize;
 use utoipa::IntoParams;
 
@@ -61,4 +61,26 @@ pub async fn resolve_skill_handler(
 ) -> Result<impl IntoResponse, ApiError> {
     let skill = state.taxonomy_use_cases.resolve_skill(&query.q).await?;
     Ok(Json(skill))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/taxonomies/countries",
+    responses((status = 200, description = "Standard countries list", body = Vec<Country>)),
+    tag = "Taxonomies"
+)]
+pub async fn list_countries_handler(State(state): State<AppState>) -> Result<impl IntoResponse, ApiError> {
+    let list = state.taxonomy_use_cases.list_countries();
+    Ok(Json(list))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/taxonomies/cities",
+    responses((status = 200, description = "Standard Iranian cities list with coordinates", body = Vec<CityTaxonomy>)),
+    tag = "Taxonomies"
+)]
+pub async fn list_cities_handler(State(state): State<AppState>) -> Result<impl IntoResponse, ApiError> {
+    let list = state.taxonomy_use_cases.list_cities().await?;
+    Ok(Json(list))
 }
