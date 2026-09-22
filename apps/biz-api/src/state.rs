@@ -26,6 +26,7 @@ pub struct AppState {
     pub gov_use_cases: GovernanceUseCases,
     pub company_use_cases: CompanyUseCases,
     pub taxonomy_use_cases: TaxonomyUseCases,
+    pub saved_repo: SavedRepository,
 }
 
 impl AppState {
@@ -48,10 +49,13 @@ impl AppState {
             token_repo.clone(),
             token_service.clone(),
         );
-        let opp_use_cases = OpportunityUseCases::new(opp_repo.clone(), company_repo.clone());
+
+        // اتصال سیستم رادار و اعلان‌ها به چرخه حیات آگهی‌ها
+        let opp_use_cases = OpportunityUseCases::new(opp_repo.clone(), company_repo.clone())
+            .with_saved_repo(saved_repo.clone());
+
         let discovery_use_cases = DiscoveryUseCases::new(discovery_repo, candidate_repo.clone());
         
-        // اتصال یوزکیس کارجو به مخازن کارفرما برای قابلیت شکار استعداد و ارسال دعوت‌نامه
         let candidate_use_cases = CandidateUseCases::new(candidate_repo.clone(), app_repo.clone())
             .with_employer_repos(company_repo.clone(), opp_repo.clone());
             
@@ -61,7 +65,7 @@ impl AppState {
             candidate_repo.clone(),
             company_repo.clone(),
         );
-        let saved_use_cases = SavedUseCases::new(saved_repo, candidate_repo.clone());
+        let saved_use_cases = SavedUseCases::new(saved_repo.clone(), candidate_repo.clone());
         let gov_use_cases = GovernanceUseCases::new(gov_repo.clone(), company_repo.clone());
         let company_use_cases = CompanyUseCases::new(company_repo, opp_repo, gov_repo);
         let taxonomy_use_cases = TaxonomyUseCases::new(taxonomy_repo);
@@ -78,6 +82,7 @@ impl AppState {
             gov_use_cases,
             company_use_cases,
             taxonomy_use_cases,
+            saved_repo,
         }
     }
 

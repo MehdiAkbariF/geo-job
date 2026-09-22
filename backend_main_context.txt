@@ -1,4 +1,4 @@
-mod error;
+﻿mod error;
 mod extractors;
 mod handlers;
 mod openapi;
@@ -44,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     run_migrations(&pool).await?;
     tracing::info!("Business migrations applied successfully.");
 
-    // تضمین ۱۰۰٪ هش معتبر برای تمام کاربران تستی (کارجو و کارفرمایان)
+    // ØªØ¶Ù…ÛŒÙ† Û±Û°Û°Ùª Ù‡Ø´ Ù…Ø¹ØªØ¨Ø± Ø¨Ø±Ø§ÛŒ ØªÙ…Ø§Ù… Ú©Ø§Ø±Ø¨Ø±Ø§Ù† ØªØ³ØªÛŒ (Ú©Ø§Ø±Ø¬Ùˆ Ùˆ Ú©Ø§Ø±ÙØ±Ù…Ø§ÛŒØ§Ù†)
     if let Ok(raw_pass) = biz_domain::identity::RawPassword::new("Password1234!") {
         if let Ok(real_hash) = biz_storage::PasswordService::hash_password(&raw_pass) {
             let _ = sqlx::query("UPDATE users SET password_hash = $1 WHERE email IN ('demo@geojob.ir', 'employer@geojob.ir', 'verified_employer@geojob.ir', 'pending_employer@geojob.ir')")
@@ -125,7 +125,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/me/saved-companies", get(handlers::saved::list_saved_companies_handler))
         .route("/me/saved-searches", post(handlers::saved::save_search_handler).get(handlers::saved::list_saved_searches_handler))
 
-        // 🎯 سیستم رادارهای فضایی و نوتیفیکیشن سنتر درون‌برنامه‌ای
+        // ðŸŽ¯ Ø³ÛŒØ³ØªÙ… Ø±Ø§Ø¯Ø§Ø±Ù‡Ø§ÛŒ ÙØ¶Ø§ÛŒÛŒ Ùˆ Ù†ÙˆØªÛŒÙÛŒÚ©ÛŒØ´Ù† Ø³Ù†ØªØ± Ø¯Ø±ÙˆÙ†â€ŒØ¨Ø±Ù†Ø§Ù…Ù‡â€ŒØ§ÛŒ
         .route("/me/radars", post(handlers::saved::create_radar_handler).get(handlers::saved::list_my_radars_handler))
         .route("/me/radars/:id", delete(handlers::saved::delete_radar_handler))
         .route("/me/notifications", get(handlers::saved::list_my_notifications_handler))
