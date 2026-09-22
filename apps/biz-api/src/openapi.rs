@@ -8,7 +8,7 @@ use biz_application::application::{
 };
 use biz_application::candidate::{
     AddExperienceCommand, CandidatePreferencesDto, CandidateProfileDto, ExperienceDto,
-    SetSkillsCommand, TrackedApplicationDto, UpdateProfileCommand,
+    SetSkillsCommand, SkillDto, TrackedApplicationDto, UpdateProfileCommand,
 };
 use biz_application::company::{
     AddCompanyLocationCommand, AddMemberCommand, CompanyDto, CompanyMemberDto,
@@ -60,8 +60,9 @@ use biz_domain::taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skil
         crate::handlers::company::list_public_company_opportunities_handler,
         crate::handlers::company::list_opportunity_applicants_handler,
 
-        // Discovery & Map Bridge
+        // Discovery, Recommendations & Map Bridge
         crate::handlers::discovery::search_opportunities_handler,
+        crate::handlers::discovery::get_recommended_opportunities_handler,
         crate::handlers::discovery::get_map_pins_handler,
         crate::handlers::discovery::get_opportunities_by_location_handler,
         crate::handlers::opportunity::get_opportunity_handler,
@@ -111,6 +112,7 @@ use biz_domain::taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skil
             UpdateProfileCommand,
             AddExperienceCommand,
             ExperienceDto,
+            SkillDto,
             CandidateProfileDto,
             SetSkillsCommand,
             CandidatePreferencesDto,
@@ -159,7 +161,7 @@ use biz_domain::taxonomy::{Category, ExperienceLevel, Industry, Occupation, Skil
         (name = "Companies", description = "Company profile, branch locations & team membership"),
         (name = "Employer ATS", description = "Applicant tracking system, dossiers & opportunity pipeline"),
         (name = "Opportunities", description = "Opportunity lifecycle management (Draft, Publish, Pause, Close)"),
-        (name = "Discovery", description = "Search & Discovery orchestration and Map Pin bridging"),
+        (name = "Discovery", description = "Search, AI Recommendations & Map Pin bridging"),
         (name = "Taxonomies", description = "Standard industries, job categories, occupations & skills autocomplete"),
         (name = "Applications", description = "Candidate job applications pipeline"),
         (name = "Saved", description = "Saved opportunities, companies & searches"),

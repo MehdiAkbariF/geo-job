@@ -33,24 +33,25 @@ pub struct OpportunitySearchResult {
     #[schema(value_type = Option<[f64; 2]>, example = json!([51.3890, 35.6892]))]
     pub coordinates: Option<[f64; 2]>,
     pub distance_meters: Option<f64>,
+    /// Calculated match percentage with candidate profile (0 - 100%)
+    pub match_score: Option<u8>,
+    /// Transparent reasons explaining why this opportunity matches the candidate
+    pub match_reasons: Vec<String>,
 }
 
 /// Metadata describing the spatial context of the search results
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SpatialContext {
-    /// Spatial scope applied: "viewport" | "city" | "radius" | "national"
     pub scope: String,
-    /// Automatically detected city name based on viewport coordinates or filter
     pub detected_city: Option<String>,
-    /// Total active jobs in the detected/queried city
     pub city_total_jobs: Option<i64>,
-    /// Total active jobs nationwide in the entire platform
     pub national_total_jobs: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SearchPageResult {
     pub items: Vec<OpportunitySearchResult>,
+    pub total_count: i64,
     pub next_cursor: Option<String>,
     pub has_more: bool,
     pub spatial_context: SpatialContext,

@@ -1,3 +1,4 @@
+use crate::candidate_repo::CandidateMatchContext;
 use crate::error::StorageError;
 use biz_domain::discovery::{
     query::SearchCursor, CompanySummary, MapPinSummary, OpportunitySearchResult, SearchPageResult, SearchQuery, SortBy, SpatialContext,
@@ -31,6 +32,12 @@ struct SearchDbRow {
     pub longitude: Option<f64>,
     pub latitude: Option<f64>,
     pub distance_meters: Option<f64>,
+    pub total_matching: Option<i64>,
+    pub match_score: Option<i16>,
+    pub matched_skills_count: Option<i64>,
+    pub salary_matches: Option<bool>,
+    pub workplace_matches: Option<bool>,
+    pub location_matches: Option<bool>,
 }
 
 impl SearchDbRow {
@@ -39,6 +46,27 @@ impl SearchDbRow {
             (Some(lon), Some(lat)) => Some([lon, lat]),
             _ => None,
         };
+
+        // تولید برچسب‌های دلایل تطابق رزومه برای تجربه کاربری غنی
+        let mut match_reasons = Vec::new();
+        if let Some(score) = self.match_score {
+            if score > 0 {
+                if let Some(cnt) = self.matched_skills_count {
+                    if cnt > 0 {
+                        match_reasons.push(format!("تطابق {} مهارت تخصصی با رزومه شما", cnt));
+                    }
+                }
+                if self.salary_matches == Some(true) {
+                    match_reasons.push("حقوق متناسب با انتظار ثبت‌شده شما".to_string());
+                }
+                if self.workplace_matches == Some(true) {
+                    match_reasons.push("نوع شیوه کار منطبق با علاقه شما".to_string());
+                }
+                if self.location_matches == Some(true) {
+                    match_reasons.push("واقع در شهر سکونت شما".to_string());
+                }
+            }
+        }
 
         OpportunitySearchResult {
             id: self.id,
@@ -63,6 +91,8 @@ impl SearchDbRow {
             location_summary: self.location_summary,
             coordinates,
             distance_meters: self.distance_meters,
+            match_score: self.match_score.map(|s| s.clamp(0, 100) as u8),
+            match_reasons,
         }
     }
 }
@@ -91,7 +121,11 @@ impl DiscoveryRepository {
         Self { pool }
     }
 
-    pub async fn search(&self, q: &SearchQuery) -> Result<SearchPageResult, StorageError> {
+    pub async fn search(
+        &self,
+        q: &SearchQuery,
+        cand_ctx: Option<&CandidateMatchContext>,
+    ) -> Result<SearchPageResult, StorageError> {
         let limit = q.limit.clamp(1, 50);
 
         let (lon, lat) = q.point.map(|p| (Some(p.longitude()), Some(p.latitude()))).unwrap_or((None, None));
@@ -108,19 +142,28 @@ impl DiscoveryRepository {
         let is_bbox_mode = !is_radius_mode && west.is_some() && south.is_some() && east.is_some() && north.is_some();
         let is_city_mode = !is_radius_mode && !is_bbox_mode && q.city.is_some();
 
+        let cand_skill_ids = cand_ctx.map(|c| c.skill_ids.as_slice()).unwrap_or(&[]);
+        let cand_city = cand_ctx.and_then(|c| c.preferred_city.as_deref());
+        let cand_workplaces = cand_ctx.map(|c| c.preferred_workplace_types.as_slice()).unwrap_or(&[]);
+        let cand_min_salary = cand_ctx.and_then(|c| c.expected_salary_min);
+        let has_cand = cand_ctx.is_some();
+
         let order_clause = match q.sort {
+            SortBy::MatchScore if has_cand => {
+                "match_score DESC NULLS LAST, d.published_at DESC, d.id DESC"
+            }
             SortBy::Distance if lon.is_some() && lat.is_some() => {
-                "distance_meters ASC NULLS LAST, o.published_at DESC, o.id DESC"
+                "distance_meters ASC NULLS LAST, d.published_at DESC, d.id DESC"
             }
             SortBy::SalaryDesc => {
-                "COALESCE(o.salary_max, o.salary_min, 0) DESC, o.published_at DESC, o.id DESC"
+                "COALESCE(d.salary_max, d.salary_min, 0) DESC, d.published_at DESC, d.id DESC"
             }
-            _ => "o.published_at DESC, o.id DESC",
+            _ => "d.published_at DESC, d.id DESC",
         };
 
         let sql = format!(
             r#"
-            WITH deduped_opportunities AS (
+            WITH filtered_opportunities AS (
                 SELECT DISTINCT ON (o.id)
                     o.id,
                     o.title,
@@ -146,14 +189,36 @@ impl DiscoveryRepository {
                         WHEN $13::float8 IS NOT NULL AND $14::float8 IS NOT NULL AND loc.coordinates IS NOT NULL THEN
                             ST_Distance(loc.coordinates::geography, ST_SetSRID(ST_MakePoint($13, $14), 4326)::geography)
                         ELSE NULL
-                    END AS distance_meters
+                    END AS distance_meters,
+                    -- فرمول محاسباتی هوشمند موتور تطابق در سطح دیتابیس (وزن‌دهی ۱۰۰٪)
+                    CASE WHEN $22::boolean = true THEN
+                        ROUND(
+                            -- ۴۵٪: مهارت‌ها
+                            (COALESCE(
+                                (SELECT COUNT(DISTINCT os.skill_id)::float8 / NULLIF(COUNT(DISTINCT os2.skill_id), 0)
+                                 FROM opportunity_skills os2
+                                 LEFT JOIN opportunity_skills os ON os.opportunity_id = os2.opportunity_id AND os.skill_id = ANY($23)
+                                 WHERE os2.opportunity_id = o.id), 0.5
+                            ) * 45.0) +
+                            -- ۲۵٪: حقوق درخواستی
+                            (CASE WHEN $24::numeric IS NULL OR COALESCE(o.salary_max, o.salary_min) >= $24 THEN 25.0 ELSE 5.0 END) +
+                            -- ۱۵٪: شیوه کار (حضوری/ریموت)
+                            (CASE WHEN CARDINALITY($25::text[]) = 0 OR o.workplace_type = ANY($25) THEN 15.0 ELSE 0.0 END) +
+                            -- ۱۵٪: انطباق مکانی و شهر
+                            (CASE WHEN $26::text IS NULL OR loc.address_summary ILIKE '%' || $26 || '%' OR o.workplace_type = 'remote' THEN 15.0 ELSE 0.0 END)
+                        )::int2
+                    ELSE NULL END AS match_score,
+                    -- آمار دلایل تطابق
+                    (SELECT COUNT(DISTINCT os.skill_id) FROM opportunity_skills os WHERE os.opportunity_id = o.id AND os.skill_id = ANY($23)) AS matched_skills_count,
+                    (CASE WHEN $24::numeric IS NOT NULL AND COALESCE(o.salary_max, o.salary_min) >= $24 THEN true ELSE false END) AS salary_matches,
+                    (CASE WHEN CARDINALITY($25::text[]) > 0 AND o.workplace_type = ANY($25) THEN true ELSE false END) AS workplace_matches,
+                    (CASE WHEN $26::text IS NOT NULL AND (loc.address_summary ILIKE '%' || $26 || '%' OR o.workplace_type = 'remote') THEN true ELSE false END) AS location_matches
                 FROM opportunities o
                 INNER JOIN companies c ON c.id = o.company_id
                 LEFT JOIN opportunity_locations ol ON ol.opportunity_id = o.id
                 LEFT JOIN locations loc ON loc.id = ol.location_id
                 WHERE o.status = 'published'
                   AND (o.expires_at IS NULL OR o.expires_at > NOW())
-                  AND ($16::timestamptz IS NULL OR (o.published_at, o.id) < ($16, $17))
                   AND ($1::text IS NULL OR o.search_vector @@ plainto_tsquery('simple', $1))
                   AND ($2::uuid IS NULL OR o.category_id = $2)
                   AND ($3::uuid IS NULL OR o.occupation_id = $3)
@@ -169,26 +234,30 @@ impl DiscoveryRepository {
                           WHERE os.opportunity_id = o.id AND os.skill_id = ANY($18)
                       )
                   )
-                  -- تفکیک قطعی دورکاری: اگر include_remote خاموش است، مشاغل ریموت کاملاً حذف شوند
                   AND ($19::boolean = true OR o.workplace_type != 'remote')
-                  -- ۱. شرط شعاع جغرافیایی
                   AND (
                       $15::float8 IS NULL OR
                       (loc.coordinates IS NOT NULL AND ST_DWithin(loc.coordinates::geography, ST_SetSRID(ST_MakePoint($13, $14), 4326)::geography, $15))
                   )
-                  -- ۲. شرط کادر دید نقشه: فقط نقاطی که مختصات آنها درون کادر است
                   AND (
                       $9::float8 IS NULL OR
                       (loc.coordinates IS NOT NULL AND (loc.coordinates && ST_MakeEnvelope($9, $10, $11, $12, 4326)))
                   )
-                  -- ۳. شرط شهر
                   AND (
                       $21::text IS NULL OR
                       (loc.address_summary ILIKE '%' || $21 || '%')
                   )
                 ORDER BY o.id, distance_meters ASC NULLS LAST
+            ),
+            counted_total AS (
+                SELECT COUNT(*)::int8 AS total_matching FROM filtered_opportunities
             )
-            SELECT * FROM deduped_opportunities o
+            SELECT 
+                d.*,
+                c.total_matching
+            FROM filtered_opportunities d
+            CROSS JOIN counted_total c
+            WHERE ($16::timestamptz IS NULL OR (d.published_at, d.id) < ($16, $17))
             ORDER BY {order_clause}
             LIMIT $20
             "#
@@ -223,9 +292,15 @@ impl DiscoveryRepository {
             .bind(q.include_remote)
             .bind((limit + 1) as i64)
             .bind(effective_city)
+            .bind(has_cand)
+            .bind(cand_skill_ids)
+            .bind(cand_min_salary)
+            .bind(cand_workplaces)
+            .bind(cand_city)
             .fetch_all(&self.pool)
             .await?;
 
+        let total_count = rows.first().and_then(|r| r.total_matching).unwrap_or(0);
         let has_more = rows.len() > limit;
         let items: Vec<OpportunitySearchResult> = rows.into_iter().take(limit).map(SearchDbRow::to_domain).collect();
 
@@ -237,7 +312,6 @@ impl DiscoveryRepository {
             None
         };
 
-        // آمار کل فرصت‌های فعال کشور
         let national_total: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM opportunities WHERE status = 'published' AND (expires_at IS NULL OR expires_at > NOW())"
         )
@@ -245,13 +319,11 @@ impl DiscoveryRepository {
         .await
         .unwrap_or(0);
 
-        // استخراج نام شهر بر مبنای لوکیشن‌های ثبت‌شده در دیتابیس
         let (scope_str, detected_city_name) = if is_radius_mode {
             ("radius", None)
         } else if is_city_mode {
             ("city", q.city.clone())
         } else if is_bbox_mode {
-            // پیدا کردن نام شهری که بیشترین آدرس را در این کادر دید دارد
             let city_from_db: Option<String> = sqlx::query_scalar(
                 r#"
                 SELECT TRIM(split_part(loc.address_summary, '،', 1)) AS city_name
@@ -276,7 +348,6 @@ impl DiscoveryRepository {
             ("national", None)
         };
 
-        // تعداد کل فرصت‌های فعال شهر تعیین شده
         let city_total_jobs = if let Some(ref c_name) = detected_city_name {
             let count: i64 = sqlx::query_scalar(
                 r#"
@@ -307,6 +378,7 @@ impl DiscoveryRepository {
 
         Ok(SearchPageResult {
             items,
+            total_count,
             next_cursor,
             has_more,
             spatial_context,
@@ -426,7 +498,13 @@ impl DiscoveryRepository {
                 loc.address_summary AS location_summary,
                 ST_X(loc.coordinates::geometry) AS longitude,
                 ST_Y(loc.coordinates::geometry) AS latitude,
-                NULL::float8 AS distance_meters
+                NULL::float8 AS distance_meters,
+                NULL::int8 AS total_matching,
+                NULL::int2 AS match_score,
+                NULL::int8 AS matched_skills_count,
+                NULL::boolean AS salary_matches,
+                NULL::boolean AS workplace_matches,
+                NULL::boolean AS location_matches
             FROM opportunities o
             INNER JOIN companies c ON c.id = o.company_id
             INNER JOIN opportunity_locations ol ON ol.opportunity_id = o.id

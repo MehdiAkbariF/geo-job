@@ -39,19 +39,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pool = create_connection_pool(&db_config).await?;
     run_migrations(&pool).await?;
 
-    // ۱. اگر کاربر دستور پاک‌سازی داده‌های تستی را داده باشد:
+    // ۱. پاک‌سازی داده‌های تستی
     if args.clean_samples {
         seeder::clean_seeded_data(&pool).await?;
         return Ok(());
     }
 
-    // ۲. اگر کاربر دستور بذرپاشی سنگین تهران (۱۵۰۰+ شغل) را داده باشد:
-    if args.seed_heavy_tehran || args.seed_samples {
-        seeder::seed_heavy_tehran_data(&pool).await?;
+    // ۲. تولید ۱۰,۰۰۰ موقعیت شغلی در سراسر شهرهای ایران
+    if args.seed_10k || args.seed_samples {
+        seeder::seed_10k_national_data(&pool).await?;
         return Ok(());
     }
 
-    // ۳. اگر فایل PBF برای ایمپورت نقشه داده شده باشد:
+    // ۳. پردازش فایل PBF
     if let Some(pbf_path) = args.file {
         tracing::info!("Processing real OSM data from PBF: {:?}", pbf_path);
 

@@ -3,6 +3,6 @@ pub mod use_cases;
 
 pub use dto::{
     AddExperienceCommand, CandidatePreferencesDto, CandidateProfileDto, ExperienceDto,
-    SetSkillsCommand, TrackedApplicationDto, UpdateProfileCommand,
+    SetSkillsCommand, SkillDto, TrackedApplicationDto, UpdateProfileCommand,
 };
 pub use use_cases::CandidateUseCases;

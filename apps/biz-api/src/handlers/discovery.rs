@@ -1,5 +1,5 @@
 use crate::error::ApiError;
-use crate::extractors::auth::MaybeAuthenticatedUser;
+use crate::extractors::auth::{AuthenticatedUser, MaybeAuthenticatedUser};
 use crate::state::AppState;
 use axum::{
     extract::{Path, Query, State},
@@ -23,6 +23,20 @@ pub async fn search_opportunities_handler(
     Query(req): Query<SearchOpportunitiesRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
     let result = state.discovery_use_cases.search(maybe_auth.0, req).await?;
+    Ok(Json(result))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/opportunities/recommended",
+    responses((status = 200, description = "Personalized opportunity feed ranked by resume match score", body = SearchPageResult)),
+    tag = "Discovery"
+)]
+pub async fn get_recommended_opportunities_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+) -> Result<impl IntoResponse, ApiError> {
+    let result = state.discovery_use_cases.get_recommended_opportunities(auth.user_id, 30).await?;
     Ok(Json(result))
 }
 

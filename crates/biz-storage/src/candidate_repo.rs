@@ -52,6 +52,15 @@ struct ExperienceDbRow {
     created_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone)]
+pub struct CandidateMatchContext {
+    pub candidate_id: Uuid,
+    pub skill_ids: Vec<Uuid>,
+    pub preferred_city: Option<String>,
+    pub preferred_workplace_types: Vec<String>,
+    pub expected_salary_min: Option<Decimal>,
+}
+
 #[derive(Clone)]
 pub struct CandidateRepository {
     pool: PgPool,
@@ -108,9 +117,7 @@ impl CandidateRepository {
         Ok(row.to_domain())
     }
 
-    /// Fetches preferred geographical coordinates [longitude, latitude] for Near-Me discovery
     pub async fn get_preferred_coordinates(&self, user_id: Uuid) -> Result<Option<(f64, f64)>, StorageError> {
-        // ۱. ابتدا اگر preferred_location_id ثبت شده بود، مختصات دقیق را استخراج کن
         let loc_sql = r#"
             SELECT 
                 ST_X(loc.coordinates::geometry) AS longitude,
@@ -136,29 +143,61 @@ impl CandidateRepository {
             return Ok(Some((r.longitude, r.latitude)));
         }
 
-        // ۲. در غیر این صورت، اگر شهر ترجیحی دارد، مرکز شهر را برگردان
-        let cand = self.find_by_user_id(user_id).await?;
-        if let Some(c) = cand {
-            if let Some(city) = c.preferred_city {
-                let city_trim = city.trim();
-                let coords = match city_trim {
-                    "تهران" | "tehran" => Some((51.3890, 35.7200)),
-                    "اصفهان" | "isfahan" => Some((51.6660, 32.6546)),
-                    "مشهد" | "mashhad" => Some((59.5700, 36.3000)),
-                    "شیراز" | "shiraz" => Some((52.5200, 29.6350)),
-                    "تبریز" | "tabriz" => Some((46.3600, 38.0500)),
-                    _ => None,
-                };
-                if coords.is_some() {
-                    return Ok(coords);
-                }
-            }
-        }
-
         Ok(None)
     }
 
-    // Skills
+    // واکشی مهارت‌ها به همراه نام برای نمایش کامل در فرانت‌اند
+    pub async fn get_skills_with_names(&self, candidate_id: Uuid) -> Result<Vec<(Uuid, String)>, StorageError> {
+        let sql = r#"
+            SELECT s.id, s.name 
+            FROM candidate_skills cs
+            INNER JOIN skills s ON s.id = cs.skill_id
+            WHERE cs.candidate_id = $1
+            ORDER BY s.name ASC
+        "#;
+
+        #[derive(sqlx::FromRow)]
+        struct SkillRow {
+            id: Uuid,
+            name: String,
+        }
+
+        let rows = sqlx::query_as::<_, SkillRow>(sql)
+            .bind(candidate_id)
+            .fetch_all(&self.pool)
+            .await?;
+
+        Ok(rows.into_iter().map(|r| (r.id, r.name)).collect())
+    }
+
+    // استخراج کانتکست تطبیق هوشمند رزومه برای موتور سازگاری PostGIS
+    pub async fn get_match_context(&self, user_id: Uuid) -> Result<Option<CandidateMatchContext>, StorageError> {
+        let candidate = match self.find_by_user_id(user_id).await? {
+            Some(c) => c,
+            None => return Ok(None),
+        };
+
+        let skills: Vec<Uuid> = sqlx::query_scalar("SELECT skill_id FROM candidate_skills WHERE candidate_id = $1")
+            .bind(candidate.id)
+            .fetch_all(&self.pool)
+            .await?;
+
+        let prefs = self.get_preferences(candidate.id).await?;
+
+        let (workplaces, salary_min) = match prefs {
+            Some(p) => (p.preferred_workplace_types, p.expected_salary_min),
+            None => (Vec::new(), None),
+        };
+
+        Ok(Some(CandidateMatchContext {
+            candidate_id: candidate.id,
+            skill_ids: skills,
+            preferred_city: candidate.preferred_city,
+            preferred_workplace_types: workplaces,
+            expected_salary_min: salary_min,
+        }))
+    }
+
     pub async fn set_skills(&self, candidate_id: Uuid, skill_ids: &[Uuid]) -> Result<(), StorageError> {
         let mut tx = self.pool.begin().await?;
 
@@ -179,13 +218,6 @@ impl CandidateRepository {
         Ok(())
     }
 
-    pub async fn get_skills(&self, candidate_id: Uuid) -> Result<Vec<Uuid>, StorageError> {
-        let sql = "SELECT skill_id FROM candidate_skills WHERE candidate_id = $1";
-        let rows: Vec<Uuid> = sqlx::query_scalar(sql).bind(candidate_id).fetch_all(&self.pool).await?;
-        Ok(rows)
-    }
-
-    // Experience Management
     pub async fn add_experience(
         &self,
         candidate_id: Uuid,
@@ -249,7 +281,6 @@ impl CandidateRepository {
             .collect())
     }
 
-    // Preferences
     pub async fn get_preferences(&self, candidate_id: Uuid) -> Result<Option<CandidatePreferences>, StorageError> {
         #[derive(sqlx::FromRow)]
         struct PrefsDbRow {

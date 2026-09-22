@@ -123,6 +123,8 @@ impl SavedRepository {
                 location_summary: r.location_summary,
                 coordinates,
                 distance_meters: None,
+                match_score: None,
+                match_reasons: Vec::new(),
             }
         }).collect())
     }

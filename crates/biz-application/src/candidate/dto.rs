@@ -34,6 +34,12 @@ pub struct ExperienceDto {
     pub description: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct SkillDto {
+    pub id: Uuid,
+    pub name: String,
+}
+
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct CandidateProfileDto {
     pub id: Uuid,
@@ -42,7 +48,7 @@ pub struct CandidateProfileDto {
     pub headline: Option<String>,
     pub bio: Option<String>,
     pub preferred_city: Option<String>,
-    pub skills: Vec<Uuid>,
+    pub skills: Vec<SkillDto>,
     pub experiences: Vec<ExperienceDto>,
 }
 

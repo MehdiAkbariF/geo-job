@@ -9,6 +9,7 @@ pub enum SortBy {
     Newest,
     Distance,
     SalaryDesc,
+    MatchScore,
 }
 
 impl Default for SortBy {
@@ -23,6 +24,7 @@ impl SortBy {
             Self::Newest => "newest",
             Self::Distance => "distance",
             Self::SalaryDesc => "salary_desc",
+            Self::MatchScore => "match_score",
         }
     }
 
@@ -30,6 +32,7 @@ impl SortBy {
         match s {
             "distance" => Self::Distance,
             "salary_desc" => Self::SalaryDesc,
+            "match_score" => Self::MatchScore,
             _ => Self::Newest,
         }
     }

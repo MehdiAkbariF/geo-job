@@ -17,6 +17,10 @@ pub struct CliArgs {
     #[arg(long, default_value_t = false)]
     pub seed_samples: bool,
 
+    /// Seed 10,000 realistic opportunities across Iranian cities
+    #[arg(long, default_value_t = false)]
+    pub seed_10k: bool,
+
     /// Clean and remove all seeded test data from the database
     #[arg(long, default_value_t = false)]
     pub clean_samples: bool,
@@ -24,7 +28,4 @@ pub struct CliArgs {
     /// PostgreSQL Database URL
     #[arg(long)]
     pub database_url: Option<String>,
-    /// Seed 1500+ heavy test opportunities across Tehran neighborhoods
-    #[arg(long, default_value_t = false)]
-    pub seed_heavy_tehran: bool,
 }

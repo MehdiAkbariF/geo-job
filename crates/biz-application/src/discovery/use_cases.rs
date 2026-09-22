@@ -28,6 +28,12 @@ impl DiscoveryUseCases {
     ) -> Result<SearchPageResult, ApplicationError> {
         let is_near_me = req.near_me.unwrap_or(false);
 
+        // واکشی کانتکست رزومه کارجو برای محاسبه هوشمند Match Score
+        let cand_ctx = match actor_user_id {
+            Some(uid) => self.candidate_repo.get_match_context(uid).await?,
+            None => None,
+        };
+
         let mut point = match (req.lon, req.lat) {
             (Some(lon), Some(lat)) => Some(GeoPoint::new(lon, lat).map_err(|e| ApplicationError::Validation(e.to_string()))?),
             _ => None,
@@ -46,7 +52,7 @@ impl DiscoveryUseCases {
                 effective_sort = SortBy::Distance;
             } else {
                 return Err(ApplicationError::Validation(
-                    "No preferred city or location set in your profile. Please set your city in your profile first.".into(),
+                    "No preferred location set in your profile. Please set your city or address in your profile first.".into(),
                 ));
             }
         }
@@ -102,7 +108,27 @@ impl DiscoveryUseCases {
             limit: req.limit.unwrap_or(20),
         };
 
-        let result = self.discovery_repo.search(&query).await?;
+        let result = self.discovery_repo.search(&query, cand_ctx.as_ref()).await?;
+        Ok(result)
+    }
+
+    /// فید اختصاصی پیشنهادات شغلی با بیشترین درصد سازگاری رزومه
+    pub async fn get_recommended_opportunities(
+        &self,
+        user_id: Uuid,
+        limit: usize,
+    ) -> Result<SearchPageResult, ApplicationError> {
+        let cand_ctx = self.candidate_repo.get_match_context(user_id).await?
+            .ok_or_else(|| ApplicationError::Validation("Candidate profile does not exist".into()))?;
+
+        let query = SearchQuery {
+            sort: SortBy::MatchScore,
+            include_remote: true,
+            limit: limit.clamp(1, 50),
+            ..Default::default()
+        };
+
+        let result = self.discovery_repo.search(&query, Some(&cand_ctx)).await?;
         Ok(result)
     }
 

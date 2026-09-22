@@ -1,6 +1,6 @@
 use super::dto::{
     AddExperienceCommand, CandidatePreferencesDto, CandidateProfileDto, ExperienceDto,
-    TrackedApplicationDto, UpdateProfileCommand,
+    SetSkillsCommand, SkillDto, TrackedApplicationDto, UpdateProfileCommand,
 };
 use crate::error::ApplicationError;
 use biz_storage::{ApplicationRepository, CandidateRepository, StorageError};
@@ -30,7 +30,8 @@ impl CandidateUseCases {
             }
         };
 
-        let skills = self.candidate_repo.get_skills(candidate.id).await?;
+        // واکشی مهارت‌ها همراه با نام آنها
+        let skills_with_names = self.candidate_repo.get_skills_with_names(candidate.id).await?;
         let exps = self.candidate_repo.list_experiences(candidate.id).await?;
 
         let experiences = exps
@@ -44,6 +45,11 @@ impl CandidateUseCases {
                 is_current: e.is_current,
                 description: e.description,
             })
+            .collect();
+
+        let skills = skills_with_names
+            .into_iter()
+            .map(|(id, name)| SkillDto { id, name })
             .collect();
 
         Ok(CandidateProfileDto {
