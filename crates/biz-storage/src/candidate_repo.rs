@@ -161,7 +161,10 @@ struct ResumeDbRow {
 pub struct CandidateMatchContext {
     pub candidate_id: Uuid,
     pub skill_ids: Vec<Uuid>,
+    pub preferred_category_ids: Vec<Uuid>,
     pub preferred_city: Option<String>,
+    pub commute_coords: Option<(f64, f64)>,
+    pub commute_radius_meters: i32,
     pub preferred_workplace_types: Vec<String>,
     pub expected_salary_min: Option<Decimal>,
 }
@@ -344,16 +347,21 @@ impl CandidateRepository {
             .await?;
 
         let prefs = self.get_preferences(candidate.id).await?;
-
         let (workplaces, salary_min) = match prefs {
             Some(p) => (p.preferred_workplace_types, p.expected_salary_min),
             None => (Vec::new(), None),
         };
 
+        let commute_coords = self.get_preferred_coordinates(user_id).await?;
+        let commute_radius = candidate.preferred_commute_radius_meters.unwrap_or(5000);
+
         Ok(Some(CandidateMatchContext {
             candidate_id: candidate.id,
             skill_ids: skills,
+            preferred_category_ids: candidate.preferred_category_ids,
             preferred_city: candidate.preferred_city,
+            commute_coords,
+            commute_radius_meters: commute_radius,
             preferred_workplace_types: workplaces,
             expected_salary_min: salary_min,
         }))
@@ -728,7 +736,6 @@ impl CandidateRepository {
         Ok(id)
     }
 
-    // --- جستجوی استعدادها روی نقشه ویژه کارفرما با اصلاح ساختاری کامل ORDER BY ---
     pub async fn search_talents(
         &self,
         q_text: Option<&str>,

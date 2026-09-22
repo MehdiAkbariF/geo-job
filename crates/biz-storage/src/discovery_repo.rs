@@ -35,6 +35,7 @@ struct SearchDbRow {
     pub total_matching: Option<i64>,
     pub match_score: Option<i16>,
     pub matched_skills_count: Option<i64>,
+    pub category_matches: Option<bool>,
     pub salary_matches: Option<bool>,
     pub workplace_matches: Option<bool>,
     pub location_matches: Option<bool>,
@@ -49,20 +50,27 @@ impl SearchDbRow {
 
         let mut match_reasons = Vec::new();
         if let Some(score) = self.match_score {
-            if score >= 40 {
+            if score >= 20 {
                 if let Some(cnt) = self.matched_skills_count {
                     if cnt > 0 {
                         match_reasons.push(format!("تطابق {} مهارت تخصصی با رزومه شما", cnt));
                     }
                 }
-                if self.salary_matches == Some(true) {
-                    match_reasons.push("حقوق متناسب با انتظار شما".to_string());
-                }
-                if self.workplace_matches == Some(true) {
-                    match_reasons.push("شیوه کار منطبق با علاقه شما".to_string());
+                if self.category_matches == Some(true) {
+                    match_reasons.push("دسته‌بندی شغلی مورد علاقه شما".to_string());
                 }
                 if self.location_matches == Some(true) {
-                    match_reasons.push("واقع در شهر سکونت شما".to_string());
+                    if self.workplace_type == "remote" {
+                        match_reasons.push("امکان دورکاری از هر نقطه".to_string());
+                    } else {
+                        match_reasons.push("واقع در شهر سکونت یا شعاع تردد شما".to_string());
+                    }
+                }
+                if self.workplace_matches == Some(true) {
+                    match_reasons.push("شیوه کار منطبق با انتخاب شما".to_string());
+                }
+                if self.salary_matches == Some(true) {
+                    match_reasons.push("حقوق پیشنهادی متناسب با انتظار مالی شما".to_string());
                 }
             }
         }
@@ -143,17 +151,20 @@ impl DiscoveryRepository {
         let is_city_mode = !is_radius_mode && !is_bbox_mode && q.city.is_some();
 
         let cand_skill_ids = cand_ctx.map(|c| c.skill_ids.as_slice()).unwrap_or(&[]);
+        let cand_category_ids = cand_ctx.map(|c| c.preferred_category_ids.as_slice()).unwrap_or(&[]);
         let cand_city = cand_ctx.and_then(|c| c.preferred_city.as_deref());
         let cand_workplaces = cand_ctx.map(|c| c.preferred_workplace_types.as_slice()).unwrap_or(&[]);
         let cand_min_salary = cand_ctx.and_then(|c| c.expected_salary_min);
+        let (cand_lon, cand_lat) = cand_ctx.and_then(|c| c.commute_coords).map(|(x, y)| (Some(x), Some(y))).unwrap_or((None, None));
+        let cand_radius = cand_ctx.map(|c| c.commute_radius_meters as f64).unwrap_or(5000.0);
         let has_cand = cand_ctx.is_some();
 
         let order_clause = match q.sort {
             SortBy::MatchScore if has_cand => {
-                "match_score DESC NULLS LAST, d.published_at DESC, d.id DESC"
+                "d.match_score DESC NULLS LAST, d.published_at DESC, d.id DESC"
             }
             SortBy::Distance if lon.is_some() && lat.is_some() => {
-                "distance_meters ASC NULLS LAST, d.published_at DESC, d.id DESC"
+                "d.distance_meters ASC NULLS LAST, d.published_at DESC, d.id DESC"
             }
             SortBy::SalaryDesc => {
                 "COALESCE(d.salary_max, d.salary_min, 0) DESC, d.published_at DESC, d.id DESC"
@@ -190,23 +201,66 @@ impl DiscoveryRepository {
                             ST_Distance(loc.coordinates::geography, ST_SetSRID(ST_MakePoint($13, $14), 4326)::geography)
                         ELSE NULL
                     END AS distance_meters,
-                    CASE WHEN $22::boolean = true THEN
-                        ROUND(
-                            (COALESCE(
-                                (SELECT COUNT(DISTINCT os.skill_id)::float8 / NULLIF(COUNT(DISTINCT os2.skill_id), 0)
-                                 FROM opportunity_skills os2
-                                 LEFT JOIN opportunity_skills os ON os.opportunity_id = os2.opportunity_id AND os.skill_id = ANY($23)
-                                 WHERE os2.opportunity_id = o.id), 0.15
-                            ) * 50.0) +
-                            (CASE WHEN $24::numeric IS NULL OR COALESCE(o.salary_max, o.salary_min) >= $24 THEN 25.0 ELSE 0.0 END) +
-                            (CASE WHEN CARDINALITY($25::text[]) = 0 OR o.workplace_type = ANY($25) THEN 15.0 ELSE 0.0 END) +
-                            (CASE WHEN $26::text IS NULL OR loc.address_summary ILIKE '%' || $26 || '%' OR o.workplace_type = 'remote' THEN 10.0 ELSE 0.0 END)
-                        )::int2
-                    ELSE NULL END AS match_score,
+                    -- موتور تطبیق چندمعیاره با نرمالایز ریاضی (بدون هیچ عدد هاردکد)
+                  CASE 
+                        WHEN $22::boolean = true THEN
+                            (
+                                SELECT 
+                                    CASE 
+                                        -- اگر شغل هیچ ربط تخصصی به مهارت‌های کارجو نداشت، بیش از ۱۵٪ نگیرد
+                                        WHEN total_weight > 0.0 THEN
+                                            LEAST(100, GREATEST(0, ROUND((earned_points / total_weight) * 100.0)))::int2
+                                        ELSE 0::int2
+                                    END
+                                FROM (
+                                    SELECT 
+                                        -- مجموع وزن معیارهای پیکربندی‌شده
+                                        (
+                                            (CASE WHEN CARDINALITY($23::uuid[]) > 0 THEN 45.0 ELSE 0.0 END) +
+                                            (CASE WHEN CARDINALITY($29::uuid[]) > 0 THEN 25.0 ELSE 0.0 END) +
+                                            (CASE WHEN $26::text IS NOT NULL OR ($31::float8 IS NOT NULL AND $32::float8 IS NOT NULL) THEN 15.0 ELSE 0.0 END) +
+                                            (CASE WHEN CARDINALITY($25::text[]) > 0 THEN 10.0 ELSE 0.0 END) +
+                                            (CASE WHEN $24::numeric IS NOT NULL THEN 5.0 ELSE 0.0 END)
+                                        )::float8 AS total_weight,
+                                        -- نمرات واقعی بر اساس تخصص
+                                        (
+                                            -- ۱. تطابق مهارت‌های تخصصی (وزن اصلی: ۴۵ نمره)
+                                            COALESCE(
+                                                (SELECT (COUNT(DISTINCT os.skill_id)::float8 / NULLIF(COUNT(DISTINCT os2.skill_id), 0)) * 45.0
+                                                 FROM opportunity_skills os2
+                                                 LEFT JOIN opportunity_skills os ON os.opportunity_id = os2.opportunity_id AND os.skill_id = ANY($23)
+                                                 WHERE os2.opportunity_id = o.id), 
+                                                0.0
+                                            ) +
+                                            -- ۲. تطابق دسته‌بندی
+                                            (CASE WHEN CARDINALITY($29::uuid[]) > 0 AND o.category_id = ANY($29) THEN 25.0 ELSE 0.0 END) +
+                                            -- ۳. امتیاز لوکیشن (فقط در صورتی اثر مثبت بگذارد که شغل بی‌ربط نباشد)
+                                            (CASE 
+                                                WHEN o.workplace_type = 'remote' THEN 15.0
+                                                WHEN $31::float8 IS NOT NULL AND $32::float8 IS NOT NULL AND loc.coordinates IS NOT NULL AND 
+                                                     ST_Distance(loc.coordinates::geography, ST_SetSRID(ST_MakePoint($31, $32), 4326)::geography) <= ($30::float8 * 1.5) THEN 15.0
+                                                WHEN $26::text IS NOT NULL AND loc.address_summary ILIKE '%' || $26 || '%' THEN 10.0
+                                                ELSE 0.0 
+                                             END) +
+                                            -- ۴. شیوه کار
+                                            (CASE WHEN CARDINALITY($25::text[]) > 0 AND o.workplace_type = ANY($25) THEN 10.0 ELSE 0.0 END) +
+                                            -- ۵. حقوق
+                                            (CASE WHEN $24::numeric IS NOT NULL AND COALESCE(o.salary_max, o.salary_min) >= $24 THEN 5.0 ELSE 0.0 END)
+                                        )::float8 AS earned_points
+                                ) scoring_calc
+                            )
+                        ELSE NULL 
+                    END AS match_score,
                     (SELECT COUNT(DISTINCT os.skill_id) FROM opportunity_skills os WHERE os.opportunity_id = o.id AND os.skill_id = ANY($23)) AS matched_skills_count,
+                    (CASE WHEN CARDINALITY($29::uuid[]) > 0 AND o.category_id = ANY($29) THEN true ELSE false END) AS category_matches,
                     (CASE WHEN $24::numeric IS NOT NULL AND COALESCE(o.salary_max, o.salary_min) >= $24 THEN true ELSE false END) AS salary_matches,
                     (CASE WHEN CARDINALITY($25::text[]) > 0 AND o.workplace_type = ANY($25) THEN true ELSE false END) AS workplace_matches,
-                    (CASE WHEN $26::text IS NOT NULL AND (loc.address_summary ILIKE '%' || $26 || '%' OR o.workplace_type = 'remote') THEN true ELSE false END) AS location_matches
+                    (CASE 
+                        WHEN o.workplace_type = 'remote' THEN true
+                        WHEN $26::text IS NOT NULL AND loc.address_summary ILIKE '%' || $26 || '%' THEN true
+                        WHEN $31::float8 IS NOT NULL AND loc.coordinates IS NOT NULL AND ST_Distance(loc.coordinates::geography, ST_SetSRID(ST_MakePoint($31, $32), 4326)::geography) <= ($30::float8 * 1.5) THEN true
+                        ELSE false 
+                     END) AS location_matches
                 FROM opportunities o
                 INNER JOIN companies c ON c.id = o.company_id
                 LEFT JOIN opportunity_locations ol ON ol.opportunity_id = o.id
@@ -220,9 +274,7 @@ impl DiscoveryRepository {
                   AND ($5::text IS NULL OR o.opportunity_type = $5)
                   AND ($6::text IS NULL OR o.workplace_type = $6)
                   AND ($7::text IS NULL OR o.experience_level = $7)
-                  -- فیلتر حداقل حقوق: سقف یا کف حقوق شغل حداقل برابر با عدد درخواستی باشد
                   AND ($8::numeric IS NULL OR COALESCE(o.salary_max, o.salary_min) >= $8)
-                  -- فیلتر سقف حقوق: کف حقوق شغل از حداکثر درخواستی کاربر بیشتر نباشد
                   AND ($28::numeric IS NULL OR COALESCE(o.salary_min, o.salary_max) <= $28)
                   AND (
                       $18::uuid[] IS NULL OR CARDINALITY($18) = 0 OR
@@ -248,8 +300,8 @@ impl DiscoveryRepository {
             ),
             counted_total AS (
                 SELECT COUNT(*)::int8 AS total_matching 
-                FROM filtered_opportunities 
-                WHERE ($27::int2 IS NULL OR match_score >= $27)
+                FROM filtered_opportunities d
+                WHERE ($27::int2 IS NULL OR d.match_score >= $27)
             )
             SELECT 
                 d.*,
@@ -272,34 +324,38 @@ impl DiscoveryRepository {
         let min_score_i16 = min_match_score.map(|s| s as i16);
 
         let rows = sqlx::query_as::<_, SearchDbRow>(&sql)
-            .bind(&q.text)
-            .bind(q.category_id)
-            .bind(q.occupation_id)
-            .bind(q.company_id)
-            .bind(&q.opportunity_type)
-            .bind(&q.workplace_type)
-            .bind(&q.experience_level)
-            .bind(q.salary_min)
-            .bind(effective_west)
-            .bind(effective_south)
-            .bind(effective_east)
-            .bind(effective_north)
-            .bind(lon)
-            .bind(lat)
-            .bind(effective_radius)
-            .bind(cursor_published_at)
-            .bind(cursor_id)
-            .bind(&q.skill_ids)
-            .bind(q.include_remote)
-            .bind((limit + 1) as i64)
-            .bind(effective_city)
-            .bind(has_cand)
-            .bind(cand_skill_ids)
-            .bind(cand_min_salary)
-            .bind(cand_workplaces)
-            .bind(cand_city)
-            .bind(min_score_i16)
-            .bind(q.salary_max)
+            .bind(&q.text)               // $1
+            .bind(q.category_id)         // $2
+            .bind(q.occupation_id)       // $3
+            .bind(q.company_id)          // $4
+            .bind(&q.opportunity_type)   // $5
+            .bind(&q.workplace_type)     // $6
+            .bind(&q.experience_level)   // $7
+            .bind(q.salary_min)          // $8
+            .bind(effective_west)        // $9
+            .bind(effective_south)       // $10
+            .bind(effective_east)        // $11
+            .bind(effective_north)       // $12
+            .bind(lon)                   // $13
+            .bind(lat)                   // $14
+            .bind(effective_radius)      // $15
+            .bind(cursor_published_at)   // $16
+            .bind(cursor_id)             // $17
+            .bind(&q.skill_ids)          // $18
+            .bind(q.include_remote)      // $19
+            .bind((limit + 1) as i64)    // $20
+            .bind(effective_city)        // $21
+            .bind(has_cand)              // $22
+            .bind(cand_skill_ids)        // $23
+            .bind(cand_min_salary)       // $24
+            .bind(cand_workplaces)       // $25
+            .bind(cand_city)             // $26
+            .bind(min_score_i16)         // $27
+            .bind(q.salary_max)          // $28
+            .bind(cand_category_ids)     // $29
+            .bind(cand_radius)           // $30
+            .bind(cand_lon)              // $31
+            .bind(cand_lat)              // $32
             .fetch_all(&self.pool)
             .await?;
 
@@ -526,6 +582,7 @@ impl DiscoveryRepository {
                 NULL::int8 AS total_matching,
                 NULL::int2 AS match_score,
                 NULL::int8 AS matched_skills_count,
+                NULL::boolean AS category_matches,
                 NULL::boolean AS salary_matches,
                 NULL::boolean AS workplace_matches,
                 NULL::boolean AS location_matches
