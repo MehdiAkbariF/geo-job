@@ -39,6 +39,10 @@ pub enum ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let request_id = Uuid::new_v4().to_string();
+
+        // لاگ جامع خطا در کنسول برای دیباگ دقیق
+        tracing::error!(request_id = %request_id, error = ?self, "API Error encountered");
+
         let (status, code, message) = match self {
             ApiError::Application(ApplicationError::Validation(msg))
             | ApiError::Validation(msg) => (StatusCode::BAD_REQUEST, "VALIDATION_ERROR", msg),
@@ -46,28 +50,39 @@ impl IntoResponse for ApiError {
             ApiError::Application(ApplicationError::Unauthorized(msg))
             | ApiError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, "UNAUTHORIZED", msg),
             
-            ApiError::Storage(StorageError::InvalidCredentials) => (
+            // پوشش کامل حالت‌های رمز اشتباه و عدم احراز هویت
+            ApiError::Application(ApplicationError::Storage(StorageError::InvalidCredentials))
+            | ApiError::Storage(StorageError::InvalidCredentials) => (
                 StatusCode::UNAUTHORIZED,
                 "INVALID_CREDENTIALS",
-                "Email or password is incorrect".to_string(),
+                "پست الکترونیک یا کلمه عبور وارد شده نادرست است".to_string(),
             ),
             
-            ApiError::Storage(StorageError::EmailAlreadyExists) => (
+            ApiError::Application(ApplicationError::Storage(StorageError::EmailAlreadyExists))
+            | ApiError::Storage(StorageError::EmailAlreadyExists) => (
                 StatusCode::CONFLICT,
                 "EMAIL_ALREADY_EXISTS",
-                "A user with this email already exists".to_string(),
+                "کاربری با این ایمیل قبلاً در سیستم ثبت‌نام کرده است".to_string(),
             ),
             
-            ApiError::Storage(StorageError::DuplicateApplication) => (
+            ApiError::Application(ApplicationError::Storage(StorageError::DuplicateApplication))
+            | ApiError::Storage(StorageError::DuplicateApplication) => (
                 StatusCode::CONFLICT,
                 "DUPLICATE_APPLICATION",
-                "You have already applied for this opportunity".to_string(),
+                "شما قبلاً برای این موقعیت شغلی رزومه ارسال کرده‌اید".to_string(),
             ),
             
-            _ => (
+            ApiError::Application(ApplicationError::Storage(StorageError::UserNotFound))
+            | ApiError::Storage(StorageError::UserNotFound) => (
+                StatusCode::NOT_FOUND,
+                "USER_NOT_FOUND",
+                "کاربر مورد نظر یافت نشد".to_string(),
+            ),
+            
+            err => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "INTERNAL_SERVER_ERROR",
-                "An unexpected internal error occurred".to_string(),
+                format!("یک خطای غیرمنتظره در سرور رخ داد: {}", err),
             ),
         };
 

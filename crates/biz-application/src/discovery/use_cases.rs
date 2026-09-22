@@ -28,7 +28,6 @@ impl DiscoveryUseCases {
     ) -> Result<SearchPageResult, ApplicationError> {
         let is_near_me = req.near_me.unwrap_or(false);
 
-        // واکشی کانتکست رزومه کارجو برای محاسبه هوشمند Match Score
         let cand_ctx = match actor_user_id {
             Some(uid) => self.candidate_repo.get_match_context(uid).await?,
             None => None,
@@ -52,7 +51,7 @@ impl DiscoveryUseCases {
                 effective_sort = SortBy::Distance;
             } else {
                 return Err(ApplicationError::Validation(
-                    "No preferred location set in your profile. Please set your city or address in your profile first.".into(),
+                    "No preferred location set in your profile. Please set your city in your profile first.".into(),
                 ));
             }
         }
@@ -98,6 +97,7 @@ impl DiscoveryUseCases {
             workplace_type: req.workplace_type,
             experience_level: req.experience_level,
             salary_min: req.salary_min,
+            salary_max: req.salary_max,
             include_remote: req.include_remote.unwrap_or(false),
             city: req.city,
             point,
@@ -108,11 +108,10 @@ impl DiscoveryUseCases {
             limit: req.limit.unwrap_or(20),
         };
 
-        let result = self.discovery_repo.search(&query, cand_ctx.as_ref()).await?;
+        let result = self.discovery_repo.search(&query, cand_ctx.as_ref(), req.min_match_score).await?;
         Ok(result)
     }
 
-    /// فید اختصاصی پیشنهادات شغلی با بیشترین درصد سازگاری رزومه
     pub async fn get_recommended_opportunities(
         &self,
         user_id: Uuid,
@@ -128,7 +127,7 @@ impl DiscoveryUseCases {
             ..Default::default()
         };
 
-        let result = self.discovery_repo.search(&query, Some(&cand_ctx)).await?;
+        let result = self.discovery_repo.search(&query, Some(&cand_ctx), Some(50)).await?;
         Ok(result)
     }
 
@@ -159,15 +158,28 @@ impl DiscoveryUseCases {
             None => None,
         };
 
+        let skill_ids: Vec<Uuid> = req.skill_ids
+            .map(|raw| {
+                raw.split(',')
+                    .filter_map(|s| Uuid::parse_str(s.trim()).ok())
+                    .collect()
+            })
+            .unwrap_or_default();
+
         let limit = req.limit.unwrap_or(150);
         let pins = self.discovery_repo.list_map_pins(
+            req.q.as_deref(),
             bbox.as_ref(),
             point.as_ref(),
             radius.as_ref(),
             req.city.as_deref(),
             req.category_id,
+            &skill_ids,
+            req.opportunity_type.as_deref(),
             req.workplace_type.as_deref(),
+            req.experience_level.as_deref(),
             req.salary_min,
+            req.salary_max,
             limit,
         ).await?;
 

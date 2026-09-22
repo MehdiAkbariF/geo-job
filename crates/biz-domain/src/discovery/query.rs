@@ -38,7 +38,6 @@ impl SortBy {
     }
 }
 
-/// Decoded Keyset Cursor for stable O(1) pagination
 #[derive(Debug, Clone, Copy)]
 pub struct SearchCursor {
     pub published_at: DateTime<Utc>,
@@ -61,7 +60,6 @@ impl SearchCursor {
     }
 }
 
-/// Runtime Search & Discovery Query value object.
 #[derive(Debug, Clone, Default)]
 pub struct SearchQuery {
     pub text: Option<String>,
@@ -73,15 +71,14 @@ pub struct SearchQuery {
     pub workplace_type: Option<String>,
     pub experience_level: Option<String>,
     pub salary_min: Option<rust_decimal::Decimal>,
+    pub salary_max: Option<rust_decimal::Decimal>,
     pub include_remote: bool,
     
-    // Spatial & Administrative constraints
     pub city: Option<String>,
     pub point: Option<GeoPoint>,
     pub radius: Option<Radius>,
     pub bbox: Option<BoundingBox>,
 
-    // Keyset pagination & dynamic sorting
     pub sort: SortBy,
     pub cursor: Option<SearchCursor>,
     pub limit: usize,

@@ -8,7 +8,8 @@ use axum::{
     Json,
 };
 use biz_application::candidate::{
-    AddExperienceCommand, CandidatePreferencesDto, CandidateProfileDto, SetSkillsCommand,
+    AddEducationCommand, AddExperienceCommand, AddLanguageCommand, AddReferenceCommand,
+    AddResumeCommand, CandidatePreferencesDto, CandidateProfileDto, SetSkillsCommand,
     TrackedApplicationDto, UpdateProfileCommand,
 };
 use uuid::Uuid;
@@ -43,6 +44,7 @@ pub async fn update_my_profile_handler(
     Ok(Json(updated))
 }
 
+// تجربیات کاری
 #[utoipa::path(
     post,
     path = "/api/v1/candidates/me/experiences",
@@ -71,6 +73,134 @@ pub async fn delete_experience_handler(
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, ApiError> {
     state.candidate_use_cases.delete_experience(auth.user_id, id).await?;
+    Ok(StatusCode::OK)
+}
+
+// سوابق تحصیلی
+#[utoipa::path(
+    post,
+    path = "/api/v1/candidates/me/educations",
+    request_body = AddEducationCommand,
+    responses((status = 201, description = "Education added")),
+    tag = "Candidate Profile"
+)]
+pub async fn add_education_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(cmd): Json<AddEducationCommand>,
+) -> Result<impl IntoResponse, ApiError> {
+    let id = state.candidate_use_cases.add_education(auth.user_id, cmd).await?;
+    Ok((StatusCode::CREATED, Json(serde_json::json!({ "education_id": id }))))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/candidates/me/educations/{id}",
+    responses((status = 200, description = "Education deleted")),
+    tag = "Candidate Profile"
+)]
+pub async fn delete_education_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    state.candidate_use_cases.delete_education(auth.user_id, id).await?;
+    Ok(StatusCode::OK)
+}
+
+// زبان‌های خارجی
+#[utoipa::path(
+    post,
+    path = "/api/v1/candidates/me/languages",
+    request_body = AddLanguageCommand,
+    responses((status = 201, description = "Language added")),
+    tag = "Candidate Profile"
+)]
+pub async fn add_language_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(cmd): Json<AddLanguageCommand>,
+) -> Result<impl IntoResponse, ApiError> {
+    let id = state.candidate_use_cases.add_language(auth.user_id, cmd).await?;
+    Ok((StatusCode::CREATED, Json(serde_json::json!({ "language_id": id }))))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/candidates/me/languages/{id}",
+    responses((status = 200, description = "Language deleted")),
+    tag = "Candidate Profile"
+)]
+pub async fn delete_language_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    state.candidate_use_cases.delete_language(auth.user_id, id).await?;
+    Ok(StatusCode::OK)
+}
+
+// معرف‌ها و همکاران سابق
+#[utoipa::path(
+    post,
+    path = "/api/v1/candidates/me/references",
+    request_body = AddReferenceCommand,
+    responses((status = 201, description = "Reference added")),
+    tag = "Candidate Profile"
+)]
+pub async fn add_reference_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(cmd): Json<AddReferenceCommand>,
+) -> Result<impl IntoResponse, ApiError> {
+    let id = state.candidate_use_cases.add_reference(auth.user_id, cmd).await?;
+    Ok((StatusCode::CREATED, Json(serde_json::json!({ "reference_id": id }))))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/candidates/me/references/{id}",
+    responses((status = 200, description = "Reference deleted")),
+    tag = "Candidate Profile"
+)]
+pub async fn delete_reference_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    state.candidate_use_cases.delete_reference(auth.user_id, id).await?;
+    Ok(StatusCode::OK)
+}
+
+// رزومه‌ها
+#[utoipa::path(
+    post,
+    path = "/api/v1/candidates/me/resumes",
+    request_body = AddResumeCommand,
+    responses((status = 201, description = "Resume registered")),
+    tag = "Candidate Profile"
+)]
+pub async fn add_resume_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Json(cmd): Json<AddResumeCommand>,
+) -> Result<impl IntoResponse, ApiError> {
+    let id = state.candidate_use_cases.add_resume(auth.user_id, cmd).await?;
+    Ok((StatusCode::CREATED, Json(serde_json::json!({ "resume_id": id }))))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/candidates/me/resumes/{id}",
+    responses((status = 200, description = "Resume deleted")),
+    tag = "Candidate Profile"
+)]
+pub async fn delete_resume_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    state.candidate_use_cases.delete_resume(auth.user_id, id).await?;
     Ok(StatusCode::OK)
 }
 

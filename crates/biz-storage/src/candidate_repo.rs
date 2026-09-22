@@ -1,5 +1,8 @@
 use crate::error::StorageError;
-use biz_domain::candidate::{Candidate, CandidateEducation, CandidateExperience, CandidateResume};
+use biz_domain::candidate::{
+    Candidate, CandidateEducation, CandidateExperience, CandidateLanguage, CandidateReference,
+    CandidateResume,
+};
 use biz_domain::saved::CandidatePreferences;
 use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
@@ -15,8 +18,30 @@ struct CandidateDbRow {
     headline: Option<String>,
     bio: Option<String>,
     avatar_storage_key: Option<String>,
-    preferred_location_id: Option<Uuid>,
+    residence_location_id: Option<Uuid>,
     preferred_city: Option<String>,
+    preferred_commute_center_id: Option<Uuid>,
+    preferred_commute_radius_meters: Option<i32>,
+    is_foreign_national: bool,
+    nationality_country_code: Option<String>,
+    has_disability: bool,
+    disability_type: Option<String>,
+    gender: Option<String>,
+    military_service_status: Option<String>,
+    marital_status: Option<String>,
+    birth_date: Option<NaiveDate>,
+    preferred_category_ids: Vec<Uuid>,
+    linkedin_url: Option<String>,
+    github_url: Option<String>,
+    website_url: Option<String>,
+    audio_intro_storage_key: Option<String>,
+    job_search_status: Option<String>,
+    awards: serde_json::Value,
+    certifications: serde_json::Value,
+    academic_projects: serde_json::Value,
+    publications: serde_json::Value,
+    volunteering: serde_json::Value,
+    portfolio_items: serde_json::Value,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
 }
@@ -31,8 +56,30 @@ impl CandidateDbRow {
             headline: self.headline,
             bio: self.bio,
             avatar_storage_key: self.avatar_storage_key,
-            preferred_location_id: self.preferred_location_id,
+            residence_location_id: self.residence_location_id,
             preferred_city: self.preferred_city,
+            preferred_commute_center_id: self.preferred_commute_center_id,
+            preferred_commute_radius_meters: self.preferred_commute_radius_meters,
+            is_foreign_national: self.is_foreign_national,
+            nationality_country_code: self.nationality_country_code,
+            has_disability: self.has_disability,
+            disability_type: self.disability_type,
+            gender: self.gender,
+            military_service_status: self.military_service_status,
+            marital_status: self.marital_status,
+            birth_date: self.birth_date,
+            preferred_category_ids: self.preferred_category_ids,
+            linkedin_url: self.linkedin_url,
+            github_url: self.github_url,
+            website_url: self.website_url,
+            audio_intro_storage_key: self.audio_intro_storage_key,
+            job_search_status: self.job_search_status.unwrap_or_else(|| "actively_looking".to_string()),
+            awards: self.awards,
+            certifications: self.certifications,
+            academic_projects: self.academic_projects,
+            publications: self.publications,
+            volunteering: self.volunteering,
+            portfolio_items: self.portfolio_items,
             created_at: self.created_at,
             updated_at: self.updated_at,
         }
@@ -45,10 +92,66 @@ struct ExperienceDbRow {
     candidate_id: Uuid,
     title: String,
     company_name: String,
-    start_date: NaiveDate,
-    end_date: Option<NaiveDate>,
+    activity_field: Option<String>,
+    seniority_level: Option<String>,
+    company_industry: Option<String>,
+    country: Option<String>,
+    city: Option<String>,
+    start_month: Option<i16>,
+    start_year: Option<i32>,
+    end_month: Option<i16>,
+    end_year: Option<i32>,
     is_current: bool,
-    description: Option<String>,
+    achievements: Option<String>,
+    created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct EducationDbRow {
+    id: Uuid,
+    candidate_id: Uuid,
+    institution: String,
+    degree_level: String,
+    field_of_study: Option<String>,
+    gpa: Option<Decimal>,
+    start_year: Option<i32>,
+    end_year: Option<i32>,
+    is_current: bool,
+    created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct LanguageDbRow {
+    id: Uuid,
+    candidate_id: Uuid,
+    language_name: String,
+    proficiency_level: String,
+    created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct ReferenceDbRow {
+    id: Uuid,
+    candidate_id: Uuid,
+    full_name: String,
+    organization_name: String,
+    job_title: String,
+    relationship_type: Option<String>,
+    start_year: Option<i32>,
+    end_year: Option<i32>,
+    is_still_colleagues: bool,
+    phone: Option<String>,
+    created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct ResumeDbRow {
+    id: Uuid,
+    candidate_id: Uuid,
+    storage_key: String,
+    filename: String,
+    mime_type: String,
+    file_size: i64,
     created_at: DateTime<Utc>,
 }
 
@@ -81,36 +184,82 @@ impl CandidateRepository {
         Ok(row.map(CandidateDbRow::to_domain))
     }
 
-    pub async fn upsert_profile(
-        &self,
-        user_id: Uuid,
-        first_name: &str,
-        last_name: &str,
-        headline: Option<&str>,
-        bio: Option<&str>,
-        preferred_city: Option<&str>,
-    ) -> Result<Candidate, StorageError> {
+    pub async fn upsert_profile(&self, item: &Candidate) -> Result<Candidate, StorageError> {
         let sql = r#"
-            INSERT INTO candidates (user_id, first_name, last_name, headline, bio, preferred_city)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (user_id) 
-            DO UPDATE SET
+            INSERT INTO candidates (
+                user_id, first_name, last_name, headline, bio, preferred_city,
+                residence_location_id, preferred_commute_radius_meters,
+                is_foreign_national, nationality_country_code, has_disability, disability_type,
+                gender, military_service_status, marital_status, birth_date, preferred_category_ids,
+                linkedin_url, github_url, website_url, audio_intro_storage_key, job_search_status,
+                awards, certifications, academic_projects, publications, volunteering, portfolio_items,
+                updated_at
+            )
+            VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
+                $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, NOW()
+            )
+            ON CONFLICT (user_id) DO UPDATE SET
                 first_name = EXCLUDED.first_name,
                 last_name = EXCLUDED.last_name,
                 headline = EXCLUDED.headline,
                 bio = EXCLUDED.bio,
                 preferred_city = EXCLUDED.preferred_city,
+                residence_location_id = EXCLUDED.residence_location_id,
+                preferred_commute_radius_meters = EXCLUDED.preferred_commute_radius_meters,
+                is_foreign_national = EXCLUDED.is_foreign_national,
+                nationality_country_code = EXCLUDED.nationality_country_code,
+                has_disability = EXCLUDED.has_disability,
+                disability_type = EXCLUDED.disability_type,
+                gender = EXCLUDED.gender,
+                military_service_status = EXCLUDED.military_service_status,
+                marital_status = EXCLUDED.marital_status,
+                birth_date = EXCLUDED.birth_date,
+                preferred_category_ids = EXCLUDED.preferred_category_ids,
+                linkedin_url = EXCLUDED.linkedin_url,
+                github_url = EXCLUDED.github_url,
+                website_url = EXCLUDED.website_url,
+                audio_intro_storage_key = EXCLUDED.audio_intro_storage_key,
+                job_search_status = EXCLUDED.job_search_status,
+                awards = EXCLUDED.awards,
+                certifications = EXCLUDED.certifications,
+                academic_projects = EXCLUDED.academic_projects,
+                publications = EXCLUDED.publications,
+                volunteering = EXCLUDED.volunteering,
+                portfolio_items = EXCLUDED.portfolio_items,
                 updated_at = NOW()
             RETURNING *
         "#;
 
         let row = sqlx::query_as::<_, CandidateDbRow>(sql)
-            .bind(user_id)
-            .bind(first_name)
-            .bind(last_name)
-            .bind(headline)
-            .bind(bio)
-            .bind(preferred_city)
+            .bind(item.user_id)
+            .bind(&item.first_name)
+            .bind(&item.last_name)
+            .bind(&item.headline)
+            .bind(&item.bio)
+            .bind(&item.preferred_city)
+            .bind(item.residence_location_id)
+            .bind(item.preferred_commute_radius_meters)
+            .bind(item.is_foreign_national)
+            .bind(&item.nationality_country_code)
+            .bind(item.has_disability)
+            .bind(&item.disability_type)
+            .bind(&item.gender)
+            .bind(&item.military_service_status)
+            .bind(&item.marital_status)
+            .bind(item.birth_date)
+            .bind(&item.preferred_category_ids)
+            .bind(&item.linkedin_url)
+            .bind(&item.github_url)
+            .bind(&item.website_url)
+            .bind(&item.audio_intro_storage_key)
+            .bind(&item.job_search_status)
+            .bind(&item.awards)
+            .bind(&item.certifications)
+            .bind(&item.academic_projects)
+            .bind(&item.publications)
+            .bind(&item.volunteering)
+            .bind(&item.portfolio_items)
             .fetch_one(&self.pool)
             .await?;
 
@@ -123,7 +272,7 @@ impl CandidateRepository {
                 ST_X(loc.coordinates::geometry) AS longitude,
                 ST_Y(loc.coordinates::geometry) AS latitude
             FROM candidates c
-            INNER JOIN locations loc ON loc.id = c.preferred_location_id
+            INNER JOIN locations loc ON loc.id = COALESCE(c.preferred_commute_center_id, c.residence_location_id)
             WHERE c.user_id = $1
             LIMIT 1
         "#;
@@ -146,7 +295,6 @@ impl CandidateRepository {
         Ok(None)
     }
 
-    // واکشی مهارت‌ها به همراه نام برای نمایش کامل در فرانت‌اند
     pub async fn get_skills_with_names(&self, candidate_id: Uuid) -> Result<Vec<(Uuid, String)>, StorageError> {
         let sql = r#"
             SELECT s.id, s.name 
@@ -170,7 +318,6 @@ impl CandidateRepository {
         Ok(rows.into_iter().map(|r| (r.id, r.name)).collect())
     }
 
-    // استخراج کانتکست تطبیق هوشمند رزومه برای موتور سازگاری PostGIS
     pub async fn get_match_context(&self, user_id: Uuid) -> Result<Option<CandidateMatchContext>, StorageError> {
         let candidate = match self.find_by_user_id(user_id).await? {
             Some(c) => c,
@@ -218,30 +365,33 @@ impl CandidateRepository {
         Ok(())
     }
 
-    pub async fn add_experience(
-        &self,
-        candidate_id: Uuid,
-        title: &str,
-        company_name: &str,
-        start_date: NaiveDate,
-        end_date: Option<NaiveDate>,
-        is_current: bool,
-        description: Option<&str>,
-    ) -> Result<Uuid, StorageError> {
+    // سوابق شغلی
+    pub async fn add_experience(&self, exp: &CandidateExperience) -> Result<Uuid, StorageError> {
         let sql = r#"
-            INSERT INTO candidate_experiences (candidate_id, title, company_name, start_date, end_date, is_current, description)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO candidate_experiences (
+                candidate_id, title, company_name, activity_field, seniority_level,
+                company_industry, country, city, start_month, start_year, end_month, end_year,
+                is_current, achievements
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             RETURNING id
         "#;
 
         let id: Uuid = sqlx::query_scalar(sql)
-            .bind(candidate_id)
-            .bind(title)
-            .bind(company_name)
-            .bind(start_date)
-            .bind(end_date)
-            .bind(is_current)
-            .bind(description)
+            .bind(exp.candidate_id)
+            .bind(&exp.title)
+            .bind(&exp.company_name)
+            .bind(&exp.activity_field)
+            .bind(&exp.seniority_level)
+            .bind(&exp.company_industry)
+            .bind(&exp.country)
+            .bind(&exp.city)
+            .bind(exp.start_month)
+            .bind(exp.start_year)
+            .bind(exp.end_month)
+            .bind(exp.end_year)
+            .bind(exp.is_current)
+            .bind(&exp.achievements)
             .fetch_one(&self.pool)
             .await?;
 
@@ -259,7 +409,7 @@ impl CandidateRepository {
     }
 
     pub async fn list_experiences(&self, candidate_id: Uuid) -> Result<Vec<CandidateExperience>, StorageError> {
-        let sql = "SELECT * FROM candidate_experiences WHERE candidate_id = $1 ORDER BY start_date DESC";
+        let sql = "SELECT * FROM candidate_experiences WHERE candidate_id = $1 ORDER BY COALESCE(start_year, 0) DESC";
         let rows = sqlx::query_as::<_, ExperienceDbRow>(sql)
             .bind(candidate_id)
             .fetch_all(&self.pool)
@@ -272,15 +422,209 @@ impl CandidateRepository {
                 candidate_id: r.candidate_id,
                 title: r.title,
                 company_name: r.company_name,
-                start_date: r.start_date,
-                end_date: r.end_date,
+                activity_field: r.activity_field,
+                seniority_level: r.seniority_level,
+                company_industry: r.company_industry,
+                country: r.country,
+                city: r.city,
+                start_month: r.start_month,
+                start_year: r.start_year,
+                end_month: r.end_month,
+                end_year: r.end_year,
                 is_current: r.is_current,
-                description: r.description,
+                achievements: r.achievements,
                 created_at: r.created_at,
             })
             .collect())
     }
 
+    // سوابق تحصیلی
+    pub async fn add_education(&self, edu: &CandidateEducation) -> Result<Uuid, StorageError> {
+        let sql = r#"
+            INSERT INTO candidate_educations (
+                candidate_id, institution, degree_level, field_of_study, gpa,
+                start_year, end_year, is_current
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING id
+        "#;
+
+        let id: Uuid = sqlx::query_scalar(sql)
+            .bind(edu.candidate_id)
+            .bind(&edu.institution)
+            .bind(&edu.degree_level)
+            .bind(&edu.field_of_study)
+            .bind(edu.gpa)
+            .bind(edu.start_year)
+            .bind(edu.end_year)
+            .bind(edu.is_current)
+            .fetch_one(&self.pool)
+            .await?;
+
+        Ok(id)
+    }
+
+    pub async fn delete_education(&self, candidate_id: Uuid, edu_id: Uuid) -> Result<(), StorageError> {
+        let sql = "DELETE FROM candidate_educations WHERE id = $1 AND candidate_id = $2";
+        sqlx::query(sql)
+            .bind(edu_id)
+            .bind(candidate_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn list_educations(&self, candidate_id: Uuid) -> Result<Vec<CandidateEducation>, StorageError> {
+        let sql = "SELECT * FROM candidate_educations WHERE candidate_id = $1 ORDER BY COALESCE(start_year, 0) DESC";
+        let rows = sqlx::query_as::<_, EducationDbRow>(sql)
+            .bind(candidate_id)
+            .fetch_all(&self.pool)
+            .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| CandidateEducation {
+                id: r.id,
+                candidate_id: r.candidate_id,
+                institution: r.institution,
+                degree_level: r.degree_level,
+                field_of_study: r.field_of_study,
+                gpa: r.gpa,
+                start_year: r.start_year,
+                end_year: r.end_year,
+                is_current: r.is_current,
+                created_at: r.created_at,
+            })
+            .collect())
+    }
+
+    // زبان‌های خارجی
+    pub async fn add_language(&self, lang: &CandidateLanguage) -> Result<Uuid, StorageError> {
+        let sql = "INSERT INTO candidate_languages (candidate_id, language_name, proficiency_level) VALUES ($1, $2, $3) RETURNING id";
+        let id: Uuid = sqlx::query_scalar(sql)
+            .bind(lang.candidate_id)
+            .bind(&lang.language_name)
+            .bind(&lang.proficiency_level)
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(id)
+    }
+
+    pub async fn delete_language(&self, candidate_id: Uuid, lang_id: Uuid) -> Result<(), StorageError> {
+        sqlx::query("DELETE FROM candidate_languages WHERE id = $1 AND candidate_id = $2")
+            .bind(lang_id)
+            .bind(candidate_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn list_languages(&self, candidate_id: Uuid) -> Result<Vec<CandidateLanguage>, StorageError> {
+        let sql = "SELECT * FROM candidate_languages WHERE candidate_id = $1 ORDER BY language_name ASC";
+        let rows = sqlx::query_as::<_, LanguageDbRow>(sql).bind(candidate_id).fetch_all(&self.pool).await?;
+        Ok(rows.into_iter().map(|r| CandidateLanguage {
+            id: r.id,
+            candidate_id: r.candidate_id,
+            language_name: r.language_name,
+            proficiency_level: r.proficiency_level,
+            created_at: r.created_at,
+        }).collect())
+    }
+
+    // معرف‌ها و همکاران سابق
+    pub async fn add_reference(&self, ref_item: &CandidateReference) -> Result<Uuid, StorageError> {
+        let sql = r#"
+            INSERT INTO candidate_references (
+                candidate_id, full_name, organization_name, job_title,
+                relationship_type, start_year, end_year, is_still_colleagues, phone
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING id
+        "#;
+        let id: Uuid = sqlx::query_scalar(sql)
+            .bind(ref_item.candidate_id)
+            .bind(&ref_item.full_name)
+            .bind(&ref_item.organization_name)
+            .bind(&ref_item.job_title)
+            .bind(&ref_item.relationship_type)
+            .bind(ref_item.start_year)
+            .bind(ref_item.end_year)
+            .bind(ref_item.is_still_colleagues)
+            .bind(&ref_item.phone)
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(id)
+    }
+
+    pub async fn delete_reference(&self, candidate_id: Uuid, ref_id: Uuid) -> Result<(), StorageError> {
+        sqlx::query("DELETE FROM candidate_references WHERE id = $1 AND candidate_id = $2")
+            .bind(ref_id)
+            .bind(candidate_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn list_references(&self, candidate_id: Uuid) -> Result<Vec<CandidateReference>, StorageError> {
+        let sql = "SELECT * FROM candidate_references WHERE candidate_id = $1 ORDER BY full_name ASC";
+        let rows = sqlx::query_as::<_, ReferenceDbRow>(sql).bind(candidate_id).fetch_all(&self.pool).await?;
+        Ok(rows.into_iter().map(|r| CandidateReference {
+            id: r.id,
+            candidate_id: r.candidate_id,
+            full_name: r.full_name,
+            organization_name: r.organization_name,
+            job_title: r.job_title,
+            relationship_type: r.relationship_type,
+            start_year: r.start_year,
+            end_year: r.end_year,
+            is_still_colleagues: r.is_still_colleagues,
+            phone: r.phone,
+            created_at: r.created_at,
+        }).collect())
+    }
+
+    // رزومه‌ها
+    pub async fn add_resume(&self, res: &CandidateResume) -> Result<Uuid, StorageError> {
+        let sql = r#"
+            INSERT INTO candidate_resumes (candidate_id, storage_key, filename, mime_type, file_size)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id
+        "#;
+        let id: Uuid = sqlx::query_scalar(sql)
+            .bind(res.candidate_id)
+            .bind(&res.storage_key)
+            .bind(&res.filename)
+            .bind(&res.mime_type)
+            .bind(res.file_size)
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(id)
+    }
+
+    pub async fn delete_resume(&self, candidate_id: Uuid, resume_id: Uuid) -> Result<(), StorageError> {
+        sqlx::query("DELETE FROM candidate_resumes WHERE id = $1 AND candidate_id = $2")
+            .bind(resume_id)
+            .bind(candidate_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn list_resumes(&self, candidate_id: Uuid) -> Result<Vec<CandidateResume>, StorageError> {
+        let sql = "SELECT * FROM candidate_resumes WHERE candidate_id = $1 ORDER BY created_at DESC";
+        let rows = sqlx::query_as::<_, ResumeDbRow>(sql).bind(candidate_id).fetch_all(&self.pool).await?;
+        Ok(rows.into_iter().map(|r| CandidateResume {
+            id: r.id,
+            candidate_id: r.candidate_id,
+            storage_key: r.storage_key,
+            filename: r.filename,
+            mime_type: r.mime_type,
+            file_size: r.file_size,
+            created_at: r.created_at,
+        }).collect())
+    }
+
+    // ترجیحات
     pub async fn get_preferences(&self, candidate_id: Uuid) -> Result<Option<CandidatePreferences>, StorageError> {
         #[derive(sqlx::FromRow)]
         struct PrefsDbRow {
@@ -294,10 +638,7 @@ impl CandidateRepository {
         }
 
         let sql = "SELECT * FROM candidate_preferences WHERE candidate_id = $1";
-        let row: Option<PrefsDbRow> = sqlx::query_as(sql)
-            .bind(candidate_id)
-            .fetch_optional(&self.pool)
-            .await?;
+        let row: Option<PrefsDbRow> = sqlx::query_as(sql).bind(candidate_id).fetch_optional(&self.pool).await?;
 
         Ok(row.map(|r| CandidatePreferences {
             candidate_id: r.candidate_id,

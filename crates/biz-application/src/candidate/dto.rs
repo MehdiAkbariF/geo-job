@@ -11,16 +11,45 @@ pub struct UpdateProfileCommand {
     pub headline: Option<String>,
     pub bio: Option<String>,
     pub preferred_city: Option<String>,
+    pub residence_location_id: Option<Uuid>,
+    pub preferred_commute_radius_meters: Option<i32>,
+    pub is_foreign_national: Option<bool>,
+    pub nationality_country_code: Option<String>,
+    pub has_disability: Option<bool>,
+    pub disability_type: Option<String>,
+    pub gender: Option<String>,
+    pub military_service_status: Option<String>,
+    pub marital_status: Option<String>,
+    pub birth_date: Option<NaiveDate>,
+    pub preferred_category_ids: Option<Vec<Uuid>>,
+    pub linkedin_url: Option<String>,
+    pub github_url: Option<String>,
+    pub website_url: Option<String>,
+    pub audio_intro_storage_key: Option<String>,
+    pub job_search_status: Option<String>,
+    pub awards: Option<serde_json::Value>,
+    pub certifications: Option<serde_json::Value>,
+    pub academic_projects: Option<serde_json::Value>,
+    pub publications: Option<serde_json::Value>,
+    pub volunteering: Option<serde_json::Value>,
+    pub portfolio_items: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct AddExperienceCommand {
     pub title: String,
     pub company_name: String,
-    pub start_date: NaiveDate,
-    pub end_date: Option<NaiveDate>,
+    pub activity_field: Option<String>,
+    pub seniority_level: Option<String>,
+    pub company_industry: Option<String>,
+    pub country: Option<String>,
+    pub city: Option<String>,
+    pub start_month: Option<i16>,
+    pub start_year: Option<i32>,
+    pub end_month: Option<i16>,
+    pub end_year: Option<i32>,
     pub is_current: bool,
-    pub description: Option<String>,
+    pub achievements: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -28,10 +57,96 @@ pub struct ExperienceDto {
     pub id: Uuid,
     pub title: String,
     pub company_name: String,
-    pub start_date: NaiveDate,
-    pub end_date: Option<NaiveDate>,
+    pub activity_field: Option<String>,
+    pub seniority_level: Option<String>,
+    pub company_industry: Option<String>,
+    pub country: Option<String>,
+    pub city: Option<String>,
+    pub start_month: Option<i16>,
+    pub start_year: Option<i32>,
+    pub end_month: Option<i16>,
+    pub end_year: Option<i32>,
     pub is_current: bool,
-    pub description: Option<String>,
+    pub achievements: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct AddEducationCommand {
+    pub institution: String,
+    pub degree_level: String,
+    pub field_of_study: Option<String>,
+    pub gpa: Option<Decimal>,
+    pub start_year: Option<i32>,
+    pub end_year: Option<i32>,
+    pub is_current: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct EducationDto {
+    pub id: Uuid,
+    pub institution: String,
+    pub degree_level: String,
+    pub field_of_study: Option<String>,
+    pub gpa: Option<Decimal>,
+    pub start_year: Option<i32>,
+    pub end_year: Option<i32>,
+    pub is_current: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct AddLanguageCommand {
+    pub language_name: String,
+    pub proficiency_level: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct LanguageDto {
+    pub id: Uuid,
+    pub language_name: String,
+    pub proficiency_level: String,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct AddReferenceCommand {
+    pub full_name: String,
+    pub organization_name: String,
+    pub job_title: String,
+    pub relationship_type: Option<String>,
+    pub start_year: Option<i32>,
+    pub end_year: Option<i32>,
+    pub is_still_colleagues: bool,
+    pub phone: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ReferenceDto {
+    pub id: Uuid,
+    pub full_name: String,
+    pub organization_name: String,
+    pub job_title: String,
+    pub relationship_type: Option<String>,
+    pub start_year: Option<i32>,
+    pub end_year: Option<i32>,
+    pub is_still_colleagues: bool,
+    pub phone: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct AddResumeCommand {
+    pub storage_key: String,
+    pub filename: String,
+    pub mime_type: String,
+    pub file_size: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ResumeDto {
+    pub id: Uuid,
+    pub storage_key: String,
+    pub filename: String,
+    pub mime_type: String,
+    pub file_size: i64,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -48,8 +163,34 @@ pub struct CandidateProfileDto {
     pub headline: Option<String>,
     pub bio: Option<String>,
     pub preferred_city: Option<String>,
+    pub residence_location_id: Option<Uuid>,
+    pub preferred_commute_radius_meters: Option<i32>,
+    pub is_foreign_national: bool,
+    pub nationality_country_code: Option<String>,
+    pub has_disability: bool,
+    pub disability_type: Option<String>,
+    pub gender: Option<String>,
+    pub military_service_status: Option<String>,
+    pub marital_status: Option<String>,
+    pub birth_date: Option<NaiveDate>,
+    pub preferred_category_ids: Vec<Uuid>,
+    pub linkedin_url: Option<String>,
+    pub github_url: Option<String>,
+    pub website_url: Option<String>,
+    pub audio_intro_storage_key: Option<String>,
+    pub job_search_status: String,
+    pub awards: serde_json::Value,
+    pub certifications: serde_json::Value,
+    pub academic_projects: serde_json::Value,
+    pub publications: serde_json::Value,
+    pub volunteering: serde_json::Value,
+    pub portfolio_items: serde_json::Value,
     pub skills: Vec<SkillDto>,
     pub experiences: Vec<ExperienceDto>,
+    pub educations: Vec<EducationDto>,
+    pub languages: Vec<LanguageDto>,
+    pub references: Vec<ReferenceDto>,
+    pub resumes: Vec<ResumeDto>,
 }
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]

@@ -44,6 +44,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     run_migrations(&pool).await?;
     tracing::info!("Business migrations applied successfully.");
 
+    if let Ok(raw_pass) = biz_domain::identity::RawPassword::new("Password1234!") {
+        if let Ok(real_hash) = biz_storage::PasswordService::hash_password(&raw_pass) {
+            let _ = sqlx::query("UPDATE users SET password_hash = $1 WHERE email = 'demo@geojob.ir'")
+                .bind(real_hash)
+                .execute(&pool)
+                .await;
+            tracing::info!("Verified cryptographic Argon2id password hash for demo@geojob.ir");
+        }
+    }
+
     let jwt_secret = std::env::var("JWT_SECRET")
         .unwrap_or_else(|_| "super-secret-jwt-key-change-in-production-123456".to_string());
 
@@ -57,10 +67,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/auth/logout", post(handlers::auth::logout_handler))
         .route("/me", get(handlers::auth::me_handler))
         
-        // Candidate Profile & Experience
+        // Candidate Profile, Experience, Education, Languages, References & Resumes
         .route("/candidates/me", get(handlers::candidate::get_my_profile_handler).put(handlers::candidate::update_my_profile_handler))
         .route("/candidates/me/experiences", post(handlers::candidate::add_experience_handler))
         .route("/candidates/me/experiences/:id", delete(handlers::candidate::delete_experience_handler))
+        .route("/candidates/me/educations", post(handlers::candidate::add_education_handler))
+        .route("/candidates/me/educations/:id", delete(handlers::candidate::delete_education_handler))
+        .route("/candidates/me/languages", post(handlers::candidate::add_language_handler))
+        .route("/candidates/me/languages/:id", delete(handlers::candidate::delete_language_handler))
+        .route("/candidates/me/references", post(handlers::candidate::add_reference_handler))
+        .route("/candidates/me/references/:id", delete(handlers::candidate::delete_reference_handler))
+        .route("/candidates/me/resumes", post(handlers::candidate::add_resume_handler))
+        .route("/candidates/me/resumes/:id", delete(handlers::candidate::delete_resume_handler))
         .route("/candidates/me/skills", put(handlers::candidate::set_skills_handler))
         .route("/candidates/me/preferences", get(handlers::candidate::get_preferences_handler).put(handlers::candidate::set_preferences_handler))
         .route("/candidates/me/applications", get(handlers::candidate::list_my_applications_handler))

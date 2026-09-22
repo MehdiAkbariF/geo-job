@@ -47,20 +47,19 @@ impl SearchDbRow {
             _ => None,
         };
 
-        // تولید برچسب‌های دلایل تطابق رزومه برای تجربه کاربری غنی
         let mut match_reasons = Vec::new();
         if let Some(score) = self.match_score {
-            if score > 0 {
+            if score >= 40 {
                 if let Some(cnt) = self.matched_skills_count {
                     if cnt > 0 {
                         match_reasons.push(format!("تطابق {} مهارت تخصصی با رزومه شما", cnt));
                     }
                 }
                 if self.salary_matches == Some(true) {
-                    match_reasons.push("حقوق متناسب با انتظار ثبت‌شده شما".to_string());
+                    match_reasons.push("حقوق متناسب با انتظار شما".to_string());
                 }
                 if self.workplace_matches == Some(true) {
-                    match_reasons.push("نوع شیوه کار منطبق با علاقه شما".to_string());
+                    match_reasons.push("شیوه کار منطبق با علاقه شما".to_string());
                 }
                 if self.location_matches == Some(true) {
                     match_reasons.push("واقع در شهر سکونت شما".to_string());
@@ -125,6 +124,7 @@ impl DiscoveryRepository {
         &self,
         q: &SearchQuery,
         cand_ctx: Option<&CandidateMatchContext>,
+        min_match_score: Option<u8>,
     ) -> Result<SearchPageResult, StorageError> {
         let limit = q.limit.clamp(1, 50);
 
@@ -190,25 +190,19 @@ impl DiscoveryRepository {
                             ST_Distance(loc.coordinates::geography, ST_SetSRID(ST_MakePoint($13, $14), 4326)::geography)
                         ELSE NULL
                     END AS distance_meters,
-                    -- فرمول محاسباتی هوشمند موتور تطابق در سطح دیتابیس (وزن‌دهی ۱۰۰٪)
                     CASE WHEN $22::boolean = true THEN
                         ROUND(
-                            -- ۴۵٪: مهارت‌ها
                             (COALESCE(
                                 (SELECT COUNT(DISTINCT os.skill_id)::float8 / NULLIF(COUNT(DISTINCT os2.skill_id), 0)
                                  FROM opportunity_skills os2
                                  LEFT JOIN opportunity_skills os ON os.opportunity_id = os2.opportunity_id AND os.skill_id = ANY($23)
-                                 WHERE os2.opportunity_id = o.id), 0.5
-                            ) * 45.0) +
-                            -- ۲۵٪: حقوق درخواستی
-                            (CASE WHEN $24::numeric IS NULL OR COALESCE(o.salary_max, o.salary_min) >= $24 THEN 25.0 ELSE 5.0 END) +
-                            -- ۱۵٪: شیوه کار (حضوری/ریموت)
+                                 WHERE os2.opportunity_id = o.id), 0.15
+                            ) * 50.0) +
+                            (CASE WHEN $24::numeric IS NULL OR COALESCE(o.salary_max, o.salary_min) >= $24 THEN 25.0 ELSE 0.0 END) +
                             (CASE WHEN CARDINALITY($25::text[]) = 0 OR o.workplace_type = ANY($25) THEN 15.0 ELSE 0.0 END) +
-                            -- ۱۵٪: انطباق مکانی و شهر
-                            (CASE WHEN $26::text IS NULL OR loc.address_summary ILIKE '%' || $26 || '%' OR o.workplace_type = 'remote' THEN 15.0 ELSE 0.0 END)
+                            (CASE WHEN $26::text IS NULL OR loc.address_summary ILIKE '%' || $26 || '%' OR o.workplace_type = 'remote' THEN 10.0 ELSE 0.0 END)
                         )::int2
                     ELSE NULL END AS match_score,
-                    -- آمار دلایل تطابق
                     (SELECT COUNT(DISTINCT os.skill_id) FROM opportunity_skills os WHERE os.opportunity_id = o.id AND os.skill_id = ANY($23)) AS matched_skills_count,
                     (CASE WHEN $24::numeric IS NOT NULL AND COALESCE(o.salary_max, o.salary_min) >= $24 THEN true ELSE false END) AS salary_matches,
                     (CASE WHEN CARDINALITY($25::text[]) > 0 AND o.workplace_type = ANY($25) THEN true ELSE false END) AS workplace_matches,
@@ -226,7 +220,10 @@ impl DiscoveryRepository {
                   AND ($5::text IS NULL OR o.opportunity_type = $5)
                   AND ($6::text IS NULL OR o.workplace_type = $6)
                   AND ($7::text IS NULL OR o.experience_level = $7)
+                  -- فیلتر حداقل حقوق: سقف یا کف حقوق شغل حداقل برابر با عدد درخواستی باشد
                   AND ($8::numeric IS NULL OR COALESCE(o.salary_max, o.salary_min) >= $8)
+                  -- فیلتر سقف حقوق: کف حقوق شغل از حداکثر درخواستی کاربر بیشتر نباشد
+                  AND ($28::numeric IS NULL OR COALESCE(o.salary_min, o.salary_max) <= $28)
                   AND (
                       $18::uuid[] IS NULL OR CARDINALITY($18) = 0 OR
                       EXISTS (
@@ -250,7 +247,9 @@ impl DiscoveryRepository {
                 ORDER BY o.id, distance_meters ASC NULLS LAST
             ),
             counted_total AS (
-                SELECT COUNT(*)::int8 AS total_matching FROM filtered_opportunities
+                SELECT COUNT(*)::int8 AS total_matching 
+                FROM filtered_opportunities 
+                WHERE ($27::int2 IS NULL OR match_score >= $27)
             )
             SELECT 
                 d.*,
@@ -258,6 +257,7 @@ impl DiscoveryRepository {
             FROM filtered_opportunities d
             CROSS JOIN counted_total c
             WHERE ($16::timestamptz IS NULL OR (d.published_at, d.id) < ($16, $17))
+              AND ($27::int2 IS NULL OR d.match_score >= $27)
             ORDER BY {order_clause}
             LIMIT $20
             "#
@@ -269,6 +269,7 @@ impl DiscoveryRepository {
         let effective_north = if is_bbox_mode { north } else { None };
         let effective_city = if is_city_mode { q.city.as_deref() } else { None };
         let effective_radius = if is_radius_mode { radius_m } else { None };
+        let min_score_i16 = min_match_score.map(|s| s as i16);
 
         let rows = sqlx::query_as::<_, SearchDbRow>(&sql)
             .bind(&q.text)
@@ -297,6 +298,8 @@ impl DiscoveryRepository {
             .bind(cand_min_salary)
             .bind(cand_workplaces)
             .bind(cand_city)
+            .bind(min_score_i16)
+            .bind(q.salary_max)
             .fetch_all(&self.pool)
             .await?;
 
@@ -387,13 +390,18 @@ impl DiscoveryRepository {
 
     pub async fn list_map_pins(
         &self,
+        q_text: Option<&str>,
         bbox: Option<&BoundingBox>,
         point: Option<&GeoPoint>,
         radius: Option<&Radius>,
         city: Option<&str>,
         category_id: Option<Uuid>,
+        skill_ids: &[Uuid],
+        opportunity_type: Option<&str>,
         workplace_type: Option<&str>,
+        experience_level: Option<&str>,
         salary_min: Option<Decimal>,
+        salary_max: Option<Decimal>,
         limit: usize,
     ) -> Result<Vec<MapPinSummary>, StorageError> {
         let (lon, lat) = point
@@ -432,18 +440,30 @@ impl DiscoveryRepository {
             LEFT JOIN categories cat ON cat.id = o.category_id
             WHERE o.status = 'published'
               AND (o.expires_at IS NULL OR o.expires_at > NOW())
-              AND ($1::float8 IS NULL OR (loc.coordinates && ST_MakeEnvelope($1, $2, $3, $4, 4326)))
-              AND ($5::float8 IS NULL OR ST_DWithin(loc.coordinates::geography, ST_SetSRID(ST_MakePoint($6, $7), 4326)::geography, $5))
-              AND ($8::text IS NULL OR loc.address_summary ILIKE '%' || $8 || '%')
-              AND ($9::uuid IS NULL OR o.category_id = $9)
-              AND ($10::text IS NULL OR o.workplace_type = $10)
-              AND ($11::numeric IS NULL OR COALESCE(o.salary_max, o.salary_min) >= $11)
+              AND ($1::text IS NULL OR o.search_vector @@ plainto_tsquery('simple', $1))
+              AND ($2::float8 IS NULL OR (loc.coordinates && ST_MakeEnvelope($2, $3, $4, $5, 4326)))
+              AND ($6::float8 IS NULL OR ST_DWithin(loc.coordinates::geography, ST_SetSRID(ST_MakePoint($7, $8), 4326)::geography, $6))
+              AND ($9::text IS NULL OR loc.address_summary ILIKE '%' || $9 || '%')
+              AND ($10::uuid IS NULL OR o.category_id = $10)
+              AND ($11::text IS NULL OR o.opportunity_type = $11)
+              AND ($12::text IS NULL OR o.workplace_type = $12)
+              AND ($13::text IS NULL OR o.experience_level = $13)
+              AND ($14::numeric IS NULL OR COALESCE(o.salary_max, o.salary_min) >= $14)
+              AND ($15::numeric IS NULL OR COALESCE(o.salary_min, o.salary_max) <= $15)
+              AND (
+                  $16::uuid[] IS NULL OR CARDINALITY($16) = 0 OR
+                  EXISTS (
+                      SELECT 1 FROM opportunity_skills os
+                      WHERE os.opportunity_id = o.id AND os.skill_id = ANY($16)
+                  )
+              )
             GROUP BY loc.id, loc.coordinates, loc.address_summary
             ORDER BY opportunity_count DESC
-            LIMIT $12
+            LIMIT $17
         "#;
 
         let rows = sqlx::query_as::<_, MapPinDbRow>(sql)
+            .bind(q_text)
             .bind(west)
             .bind(south)
             .bind(east)
@@ -453,8 +473,12 @@ impl DiscoveryRepository {
             .bind(lat)
             .bind(effective_city)
             .bind(category_id)
+            .bind(opportunity_type)
             .bind(workplace_type)
+            .bind(experience_level)
             .bind(salary_min)
+            .bind(salary_max)
+            .bind(skill_ids)
             .bind(limit as i64)
             .fetch_all(&self.pool)
             .await?;
