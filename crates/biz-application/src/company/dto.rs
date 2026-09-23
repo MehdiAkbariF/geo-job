@@ -10,6 +10,8 @@ pub struct CreateCompanyCommand {
     pub slug: String,
     pub description: Option<String>,
     pub website: Option<String>,
+    pub business_type: Option<String>, // corporate, retail_shop, restaurant_cafe, clinic_office, workshop
+    pub trade_license_number: Option<String>,
 }
 
 /// Comprehensive Employer Onboarding Command (Company + Legal Verification Evidence)
@@ -19,6 +21,8 @@ pub struct OnboardCompanyCommand {
     pub slug: String,
     pub description: Option<String>,
     pub website: Option<String>,
+    pub business_type: Option<String>,
+    pub trade_license_number: Option<String>,
     pub registration_number: String,
     pub national_id: String,
     pub license_storage_key: Option<String>,
@@ -31,6 +35,8 @@ pub struct UpdateCompanyCommand {
     pub description: Option<String>,
     pub website: Option<String>,
     pub logo_storage_key: Option<String>,
+    pub business_type: Option<String>,
+    pub trade_license_number: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
@@ -64,6 +70,8 @@ pub struct CompanyDto {
     pub description: Option<String>,
     pub logo_storage_key: Option<String>,
     pub website: Option<String>,
+    pub business_type: String,
+    pub trade_license_number: Option<String>,
     pub verification_status: String,
 }
 
@@ -106,6 +114,11 @@ pub struct CompanyPublicOpportunityDto {
     pub salary_currency: String,
     pub salary_period: String,
     pub status: String,
+    pub is_urgent: bool,
+    pub is_featured: bool,
+    pub working_hours: Option<String>,
+    pub gender_preference: String,
+    pub has_insurance: bool,
     pub published_at: Option<DateTime<Utc>>,
     pub expires_at: Option<DateTime<Utc>>,
     pub company: CompanySummaryDto,

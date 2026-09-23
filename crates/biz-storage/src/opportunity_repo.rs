@@ -25,6 +25,12 @@ struct OpportunityDbRow {
     pub salary_currency: String,
     pub salary_period: String,
     pub status: String,
+    pub is_urgent: bool,
+    pub is_featured: bool,
+    pub working_hours: Option<String>,
+    pub gender_preference: String,
+    pub has_insurance: bool,
+    pub laddered_at: Option<DateTime<Utc>>,
     pub published_at: Option<DateTime<Utc>>,
     pub expires_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
@@ -61,6 +67,12 @@ impl OpportunityDbRow {
                 period: self.salary_period,
             },
             status,
+            is_urgent: self.is_urgent,
+            is_featured: self.is_featured,
+            working_hours: self.working_hours,
+            gender_preference: self.gender_preference,
+            has_insurance: self.has_insurance,
+            laddered_at: self.laddered_at,
             published_at: self.published_at,
             expires_at: self.expires_at,
             created_at: self.created_at,
@@ -69,7 +81,6 @@ impl OpportunityDbRow {
     }
 }
 
-/// ساختار پایگاه داده جهت بازگرداندن آگهی همراه با مشخصات شرکت و مختصات جغرافیایی PostGIS
 #[derive(Debug, sqlx::FromRow)]
 pub struct PublicOpportunityRow {
     pub id: Uuid,
@@ -90,6 +101,11 @@ pub struct PublicOpportunityRow {
     pub salary_currency: String,
     pub salary_period: String,
     pub status: String,
+    pub is_urgent: bool,
+    pub is_featured: bool,
+    pub working_hours: Option<String>,
+    pub gender_preference: String,
+    pub has_insurance: bool,
     pub published_at: Option<DateTime<Utc>>,
     pub expires_at: Option<DateTime<Utc>>,
     pub location_id: Option<Uuid>,
@@ -117,13 +133,17 @@ impl OpportunityRepository {
             INSERT INTO opportunities (
                 company_id, title, description, category_id, occupation_id,
                 opportunity_type, workplace_type, remote_scope, experience_level,
-                salary_min, salary_max, salary_currency, salary_period, status
+                salary_min, salary_max, salary_currency, salary_period, status,
+                is_urgent, is_featured, working_hours, gender_preference, has_insurance
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'draft')
+            VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'draft',
+                $14, false, $15, $16, $17
+            )
             RETURNING *
         "#;
 
-        let remote_str = item.remote_scope.map(|r| r.as_str());
+        let remote_str = item.remote_scope.as_ref().map(|r| r.as_str());
 
         let row = sqlx::query_as::<_, OpportunityDbRow>(sql)
             .bind(item.company_id)
@@ -139,6 +159,10 @@ impl OpportunityRepository {
             .bind(item.salary.max)
             .bind(&item.salary.currency)
             .bind(&item.salary.period)
+            .bind(item.is_urgent)
+            .bind(item.working_hours.as_deref())
+            .bind(&item.gender_preference)
+            .bind(item.has_insurance)
             .fetch_one(&mut *tx)
             .await?;
 
@@ -168,7 +192,6 @@ impl OpportunityRepository {
         row.map(|r| r.to_domain()).transpose()
     }
 
-    // واکشی مختصات اولین شعبه فیزیکی شغل برای محاسبه مسافت تردد کارجو
     pub async fn get_first_location_coords(&self, opp_id: Uuid) -> Result<Option<(f64, f64)>, StorageError> {
         let sql = r#"
             SELECT 
@@ -201,7 +224,6 @@ impl OpportunityRepository {
         rows.into_iter().map(|r| r.to_domain()).collect()
     }
 
-    /// واکشی آگهی‌های منتشر شده شرکت به صورت غنی همراه با مشخصات شرکت و مختصات جغرافیایی شعبه در PostGIS
     pub async fn list_public_with_locations(
         &self,
         company_id: Uuid,
@@ -226,6 +248,11 @@ impl OpportunityRepository {
                 o.salary_currency,
                 o.salary_period,
                 o.status,
+                o.is_urgent,
+                o.is_featured,
+                o.working_hours,
+                o.gender_preference,
+                o.has_insurance,
                 o.published_at,
                 o.expires_at,
                 loc.id AS location_id,
@@ -276,6 +303,33 @@ impl OpportunityRepository {
             .execute(&self.pool)
             .await?;
 
+        Ok(())
+    }
+
+    /// نردبان آگهی: به‌روزرسانی تاریخ انتشار به زمان جاری برای بازگشت به صدر نتایج نقشه
+    pub async fn ladder(&self, id: Uuid) -> Result<(), StorageError> {
+        let sql = r#"
+            UPDATE opportunities
+            SET published_at = NOW(),
+                laddered_at = NOW(),
+                updated_at = NOW()
+            WHERE id = $1 AND status = 'published'
+        "#;
+        sqlx::query(sql).bind(id).execute(&self.pool).await?;
+        Ok(())
+    }
+
+    /// فعال کردن سنجاق طلایی روی نقشه
+    pub async fn set_featured(&self, id: Uuid, is_featured: bool) -> Result<(), StorageError> {
+        let sql = "UPDATE opportunities SET is_featured = $2, updated_at = NOW() WHERE id = $1";
+        sqlx::query(sql).bind(id).bind(is_featured).execute(&self.pool).await?;
+        Ok(())
+    }
+
+    /// فعال کردن برچسب استخدام فوری
+    pub async fn set_urgent(&self, id: Uuid, is_urgent: bool) -> Result<(), StorageError> {
+        let sql = "UPDATE opportunities SET is_urgent = $2, updated_at = NOW() WHERE id = $1";
+        sqlx::query(sql).bind(id).bind(is_urgent).execute(&self.pool).await?;
         Ok(())
     }
 }

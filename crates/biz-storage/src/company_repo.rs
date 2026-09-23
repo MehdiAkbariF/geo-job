@@ -12,6 +12,8 @@ struct CompanyDbRow {
     pub description: Option<String>,
     pub logo_storage_key: Option<String>,
     pub website: Option<String>,
+    pub business_type: Option<String>,
+    pub trade_license_number: Option<String>,
     pub verification_status: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -35,6 +37,8 @@ impl CompanyDbRow {
             description: self.description,
             logo_storage_key: self.logo_storage_key,
             website: self.website,
+            business_type: self.business_type.unwrap_or_else(|| "corporate".to_string()),
+            trade_license_number: self.trade_license_number,
             verification_status,
             created_at: self.created_at,
             updated_at: self.updated_at,
@@ -69,9 +73,9 @@ impl CompanyRepository {
         let mut tx = self.pool.begin().await?;
 
         let comp_sql = r#"
-            INSERT INTO companies (name, slug, description, website, verification_status)
-            VALUES ($1, $2, $3, $4, 'pending')
-            RETURNING id, name, slug, description, logo_storage_key, website, verification_status, created_at, updated_at
+            INSERT INTO companies (name, slug, description, website, business_type, trade_license_number, verification_status)
+            VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+            RETURNING id, name, slug, description, logo_storage_key, website, business_type, trade_license_number, verification_status, created_at, updated_at
         "#;
 
         let comp_row = sqlx::query_as::<_, CompanyDbRow>(comp_sql)
@@ -79,6 +83,8 @@ impl CompanyRepository {
             .bind(&new_company.slug)
             .bind(&new_company.description)
             .bind(&new_company.website)
+            .bind(&new_company.business_type)
+            .bind(&new_company.trade_license_number)
             .fetch_one(&mut *tx)
             .await?;
 
@@ -128,6 +134,8 @@ impl CompanyRepository {
             pub description: Option<String>,
             pub logo_storage_key: Option<String>,
             pub website: Option<String>,
+            pub business_type: Option<String>,
+            pub trade_license_number: Option<String>,
             pub verification_status: String,
             pub created_at: DateTime<Utc>,
             pub updated_at: DateTime<Utc>,
@@ -137,6 +145,7 @@ impl CompanyRepository {
         let sql = r#"
             SELECT 
                 c.id, c.name, c.slug, c.description, c.logo_storage_key, c.website,
+                c.business_type, c.trade_license_number,
                 c.verification_status, c.created_at, c.updated_at, cm.role
             FROM companies c
             INNER JOIN company_memberships cm ON cm.company_id = c.id
@@ -158,6 +167,8 @@ impl CompanyRepository {
                 description: r.description,
                 logo_storage_key: r.logo_storage_key,
                 website: r.website,
+                business_type: r.business_type,
+                trade_license_number: r.trade_license_number,
                 verification_status: r.verification_status,
                 created_at: r.created_at,
                 updated_at: r.updated_at,
@@ -184,7 +195,7 @@ impl CompanyRepository {
                 logo_storage_key = COALESCE($6, logo_storage_key),
                 updated_at = NOW()
             WHERE id = $1
-            RETURNING id, name, slug, description, logo_storage_key, website, verification_status, created_at, updated_at
+            RETURNING id, name, slug, description, logo_storage_key, website, business_type, trade_license_number, verification_status, created_at, updated_at
         "#;
 
         let row = sqlx::query_as::<_, CompanyDbRow>(sql)

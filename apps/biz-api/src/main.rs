@@ -106,11 +106,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/opportunities/:id", get(handlers::opportunity::get_opportunity_handler))
         .route("/opportunities/:id/track-click", post(handlers::opportunity::track_opportunity_click_handler))
 
-        // Opportunities Lifecycle
+        // Opportunities Lifecycle & Paid Map Promotions (بدون هیچ روت تکراری)
         .route("/opportunities/:id/publish", post(handlers::opportunity::publish_opportunity_handler))
         .route("/opportunities/:id/pause", post(handlers::opportunity::pause_opportunity_handler))
         .route("/opportunities/:id/resume", post(handlers::opportunity::resume_opportunity_handler))
         .route("/opportunities/:id/close", post(handlers::opportunity::close_opportunity_handler))
+        .route("/opportunities/:id/ladder", post(handlers::opportunity::ladder_opportunity_handler))
+        .route("/opportunities/:id/feature-pin", post(handlers::opportunity::feature_opportunity_pin_handler))
 
         // Employer ATS / Applications
         .route("/opportunities/:id/applications", post(handlers::application::submit_application_handler).get(handlers::company::list_opportunity_applicants_handler))

@@ -119,3 +119,33 @@ pub async fn close_opportunity_handler(
     state.opp_use_cases.close(auth.user_id, id).await?;
     Ok(StatusCode::OK)
 }
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/opportunities/{id}/ladder",
+    responses((status = 200, description = "Opportunity laddered on map via wallet deduction")),
+    tag = "Opportunities"
+)]
+pub async fn ladder_opportunity_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    state.opp_use_cases.ladder(auth.user_id, id).await?;
+    Ok(StatusCode::OK)
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/opportunities/{id}/feature-pin",
+    responses((status = 200, description = "Featured golden pin enabled on map via wallet deduction")),
+    tag = "Opportunities"
+)]
+pub async fn feature_opportunity_pin_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    state.opp_use_cases.feature_pin(auth.user_id, id).await?;
+    Ok(StatusCode::OK)
+}

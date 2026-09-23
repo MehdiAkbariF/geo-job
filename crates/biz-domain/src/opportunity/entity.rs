@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum OpportunityType {
     FullTime,
@@ -43,7 +43,7 @@ impl OpportunityType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkplaceType {
     Onsite,
@@ -70,7 +70,7 @@ impl WorkplaceType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum RemoteScope {
     Global,
@@ -122,6 +122,12 @@ pub struct Opportunity {
     pub experience_level: ExperienceLevel,
     pub salary: Salary,
     pub status: OpportunityStatus,
+    pub is_urgent: bool,
+    pub is_featured: bool,
+    pub working_hours: Option<String>,
+    pub gender_preference: String,
+    pub has_insurance: bool,
+    pub laddered_at: Option<DateTime<Utc>>,
     pub published_at: Option<DateTime<Utc>>,
     pub expires_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
@@ -140,6 +146,10 @@ pub struct NewOpportunity {
     pub remote_scope: Option<RemoteScope>,
     pub experience_level: ExperienceLevel,
     pub salary: Salary,
+    pub is_urgent: bool,
+    pub working_hours: Option<String>,
+    pub gender_preference: String,
+    pub has_insurance: bool,
     pub location_ids: Vec<Uuid>,
     pub skill_ids: Vec<Uuid>,
 }
@@ -147,17 +157,13 @@ pub struct NewOpportunity {
 impl NewOpportunity {
     pub fn validate(&self) -> Result<(), DomainError> {
         if self.title.trim().is_empty() {
-            return Err(DomainError::InvariantViolation("Job title cannot be empty".into()));
+            return Err(DomainError::InvariantViolation("عنوان آگهی نمی‌تواند خالی باشد".into()));
         }
-        if self.workplace_type == WorkplaceType::Remote && self.remote_scope.is_none() {
-            return Err(DomainError::InvariantViolation(
-                "Remote opportunities must specify a valid remote scope".into(),
-            ));
+        if self.description.trim().is_empty() {
+            return Err(DomainError::InvariantViolation("شرح آگهی نمی‌تواند خالی باشد".into()));
         }
-        if self.workplace_type == WorkplaceType::Onsite && self.location_ids.is_empty() {
-            return Err(DomainError::InvariantViolation(
-                "Onsite opportunities must have at least one physical location".into(),
-            ));
+        if self.workplace_type != WorkplaceType::Remote && self.location_ids.is_empty() {
+            return Err(DomainError::InvariantViolation("برای آگهی‌های حضوری یا هیبرید، حداقل یک شعبه باید انتخاب شود".into()));
         }
         Ok(())
     }

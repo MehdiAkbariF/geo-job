@@ -29,7 +29,7 @@ impl CompanyUseCases {
         }
     }
 
-    /// Onboards an employer atomically (Creates Company + Owner membership + Submits Verification Dossier)
+    /// آنبوردینگ کارفرما به همراه نوع کسب‌وکار و پروانه کسب
     pub async fn onboard_company(
         &self,
         user_id: Uuid,
@@ -40,12 +40,12 @@ impl CompanyUseCases {
             slug: cmd.slug,
             description: cmd.description,
             website: cmd.website,
+            business_type: cmd.business_type.unwrap_or_else(|| "corporate".to_string()),
+            trade_license_number: cmd.trade_license_number,
         };
 
-        // ۱. ایجاد شرکت و عضویت Owner
         let (created, _) = self.company_repo.create_company(user_id, &new_comp).await?;
 
-        // ۲. ارسال فوری پرونده احراز هویت قانونی در صف ادمین
         let mut evidence = vec![
             format!("reg_no:{}", cmd.registration_number.trim()),
             format!("national_id:{}", cmd.national_id.trim()),
@@ -56,7 +56,6 @@ impl CompanyUseCases {
 
         let _ = self.gov_repo.submit_verification(created.id, &evidence).await?;
 
-        // ۳. ثبت لاگ حسابرسی
         let _ = self.gov_repo.append_audit_log(
             Some(user_id),
             "employer_onboard",
@@ -72,6 +71,8 @@ impl CompanyUseCases {
             description: created.description,
             logo_storage_key: created.logo_storage_key,
             website: created.website,
+            business_type: created.business_type,
+            trade_license_number: created.trade_license_number,
             verification_status: "pending".to_string(),
         })
     }
@@ -82,6 +83,8 @@ impl CompanyUseCases {
             slug: cmd.slug,
             description: cmd.description,
             website: cmd.website,
+            business_type: cmd.business_type.unwrap_or_else(|| "corporate".to_string()),
+            trade_license_number: cmd.trade_license_number,
         };
 
         let (created, _) = self.company_repo.create_company(user_id, &new_comp).await?;
@@ -92,11 +95,12 @@ impl CompanyUseCases {
             description: created.description,
             logo_storage_key: created.logo_storage_key,
             website: created.website,
+            business_type: created.business_type,
+            trade_license_number: created.trade_license_number,
             verification_status: format!("{:?}", created.verification_status).to_lowercase(),
         })
     }
 
-    /// Lists all companies where the current authenticated user has an active membership role
     pub async fn list_my_companies(&self, user_id: Uuid) -> Result<Vec<UserCompanyMembershipDto>, ApplicationError> {
         let rows = self.company_repo.list_user_companies(user_id).await?;
         Ok(rows.into_iter().map(|(comp, role)| UserCompanyMembershipDto {
@@ -107,6 +111,8 @@ impl CompanyUseCases {
                 description: comp.description,
                 logo_storage_key: comp.logo_storage_key,
                 website: comp.website,
+                business_type: comp.business_type,
+                trade_license_number: comp.trade_license_number,
                 verification_status: format!("{:?}", comp.verification_status).to_lowercase(),
             },
             role: role.as_str().to_string(),
@@ -115,11 +121,11 @@ impl CompanyUseCases {
 
     pub async fn update_company(&self, actor_user_id: Uuid, company_id: Uuid, cmd: UpdateCompanyCommand) -> Result<CompanyDto, ApplicationError> {
         let role = self.company_repo.get_user_role(company_id, actor_user_id).await?.ok_or_else(|| {
-            ApplicationError::Unauthorized("You are not a member of this company".into())
+            ApplicationError::Unauthorized("شما عضو این سازمان نیستید".into())
         })?;
 
         if !role.can_edit_company() {
-            return Err(ApplicationError::Unauthorized("Insufficient permissions to edit company".into()));
+            return Err(ApplicationError::Unauthorized("دسترسی کافی برای ویرایش مشخصات سازمان ندارید".into()));
         }
 
         let updated = self.company_repo.update_company(
@@ -138,6 +144,8 @@ impl CompanyUseCases {
             description: updated.description,
             logo_storage_key: updated.logo_storage_key,
             website: updated.website,
+            business_type: updated.business_type,
+            trade_license_number: updated.trade_license_number,
             verification_status: format!("{:?}", updated.verification_status).to_lowercase(),
         })
     }
@@ -151,17 +159,19 @@ impl CompanyUseCases {
             description: c.description,
             logo_storage_key: c.logo_storage_key,
             website: c.website,
+            business_type: c.business_type,
+            trade_license_number: c.trade_license_number,
             verification_status: format!("{:?}", c.verification_status).to_lowercase(),
         })
     }
 
     pub async fn add_location(&self, actor_user_id: Uuid, company_id: Uuid, cmd: AddCompanyLocationCommand) -> Result<(), ApplicationError> {
         let role = self.company_repo.get_user_role(company_id, actor_user_id).await?.ok_or_else(|| {
-            ApplicationError::Unauthorized("Not authorized for this company".into())
+            ApplicationError::Unauthorized("دسترسی غیرمجاز".into())
         })?;
 
         if !role.can_edit_company() {
-            return Err(ApplicationError::Unauthorized("Cannot add company location".into()));
+            return Err(ApplicationError::Unauthorized("دسترسی ثبت لوکیشن شعبه ندارید".into()));
         }
 
         self.company_repo.add_company_location(company_id, cmd.location_id, cmd.is_headquarters).await?;
@@ -180,7 +190,7 @@ impl CompanyUseCases {
 
     pub async fn list_members(&self, actor_user_id: Uuid, company_id: Uuid) -> Result<Vec<CompanyMemberDto>, ApplicationError> {
         let _ = self.company_repo.get_user_role(company_id, actor_user_id).await?.ok_or_else(|| {
-            ApplicationError::Unauthorized("Not authorized to view team members".into())
+            ApplicationError::Unauthorized("دسترسی غیرمجاز".into())
         })?;
 
         let members = self.company_repo.list_members(company_id).await?;
@@ -193,28 +203,27 @@ impl CompanyUseCases {
 
     pub async fn add_member(&self, actor_user_id: Uuid, company_id: Uuid, cmd: AddMemberCommand) -> Result<(), ApplicationError> {
         let role = self.company_repo.get_user_role(company_id, actor_user_id).await?.ok_or_else(|| {
-            ApplicationError::Unauthorized("Not a member".into())
+            ApplicationError::Unauthorized("عضویت غیرمجاز".into())
         })?;
 
         if !role.can_manage_members() {
-            return Err(ApplicationError::Unauthorized("Only Owners and Admins can manage members".into()));
+            return Err(ApplicationError::Unauthorized("فقط مدیران اجازه افزودن عضو دارند".into()));
         }
 
-        let new_role = CompanyRole::from_str(&cmd.role).ok_or_else(|| ApplicationError::Validation("Invalid role".into()))?;
+        let new_role = CompanyRole::from_str(&cmd.role).ok_or_else(|| ApplicationError::Validation("نقش نامعتبر است".into()))?;
         self.company_repo.add_member(company_id, cmd.user_id, new_role).await?;
         Ok(())
     }
 
     pub async fn list_company_opportunities(&self, actor_user_id: Uuid, company_id: Uuid) -> Result<Vec<Opportunity>, ApplicationError> {
         let _ = self.company_repo.get_user_role(company_id, actor_user_id).await?.ok_or_else(|| {
-            ApplicationError::Unauthorized("Not a member of this company".into())
+            ApplicationError::Unauthorized("دسترسی غیرمجاز".into())
         })?;
 
         let list = self.opp_repo.list_by_company(company_id, false).await?;
         Ok(list)
     }
 
-    /// واکشی آگهی‌های عمومی منتشر شده شرکت همراه با مختصات و آدرس دقیق شعبه در نقشه
     pub async fn list_public_opportunities(
         &self,
         company_id: Uuid,
@@ -249,6 +258,11 @@ impl CompanyUseCases {
                 salary_currency: r.salary_currency,
                 salary_period: r.salary_period,
                 status: r.status,
+                is_urgent: r.is_urgent,
+                is_featured: r.is_featured,
+                working_hours: r.working_hours,
+                gender_preference: r.gender_preference,
+                has_insurance: r.has_insurance,
                 published_at: r.published_at,
                 expires_at: r.expires_at,
                 company: CompanySummaryDto {
