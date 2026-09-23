@@ -24,6 +24,9 @@ pub enum StorageError {
     #[error("User not found")]
     UserNotFound,
 
+    #[error("Validation error: {0}")]
+    Validation(String),
+
     #[error("Security error: {0}")]
     Security(String),
 }

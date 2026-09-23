@@ -11,7 +11,8 @@ pub mod taxonomy_repo;
 pub mod token_repo;
 pub mod token_service;
 pub mod user_repo;
-
+pub mod finance_repo;
+pub use finance_repo::FinanceRepository;
 pub use application_repo::ApplicationRepository;
 pub use candidate_repo::CandidateRepository;
 pub use company_repo::CompanyRepository;

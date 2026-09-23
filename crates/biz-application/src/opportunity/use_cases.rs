@@ -2,7 +2,7 @@ use super::dto::CreateOpportunityCommand;
 use crate::error::ApplicationError;
 use biz_domain::company::CompanyRole;
 use biz_domain::opportunity::{NewOpportunity, Opportunity, OpportunityStatus};
-use biz_storage::{CompanyRepository, OpportunityRepository, SavedRepository, StorageError};
+use biz_storage::{CompanyRepository, OpportunityRepository, StorageError};
 use chrono::{Duration, Utc};
 use uuid::Uuid;
 
@@ -10,21 +10,11 @@ use uuid::Uuid;
 pub struct OpportunityUseCases {
     opp_repo: OpportunityRepository,
     company_repo: CompanyRepository,
-    saved_repo: Option<SavedRepository>,
 }
 
 impl OpportunityUseCases {
     pub fn new(opp_repo: OpportunityRepository, company_repo: CompanyRepository) -> Self {
-        Self { 
-            opp_repo, 
-            company_repo,
-            saved_repo: None,
-        }
-    }
-
-    pub fn with_saved_repo(mut self, saved_repo: SavedRepository) -> Self {
-        self.saved_repo = Some(saved_repo);
-        self
+        Self { opp_repo, company_repo }
     }
 
     /// Creates an opportunity in DRAFT state after verifying employer authorization
@@ -75,12 +65,6 @@ impl OpportunityUseCases {
         let expires_at = now + Duration::days(30);
 
         self.opp_repo.update_status(opp_id, next_status, Some(now), Some(expires_at)).await?;
-
-        // 🎯 تریگر فضایی رادارهای شغلی: مانیتورینگ خودکار PostGIS برای اعلان به کارجویان محدوده
-        if let Some(ref saved_repo) = self.saved_repo {
-            let _ = saved_repo.match_radars_and_notify_on_job_publish(opp_id).await;
-        }
-
         Ok(())
     }
 

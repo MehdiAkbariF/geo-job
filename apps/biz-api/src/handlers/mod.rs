@@ -7,3 +7,4 @@ pub mod governance;
 pub mod opportunity;
 pub mod saved;
 pub mod taxonomy;
+pub mod finance;

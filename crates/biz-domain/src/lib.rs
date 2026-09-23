@@ -8,7 +8,8 @@ pub mod identity;
 pub mod opportunity;
 pub mod saved;
 pub mod taxonomy;
-
+pub mod finance;
+pub use finance::{Invoice, Tariff, Wallet, WalletTransaction};
 pub use application::{Application, ApplicationStatus, NewApplication};
 pub use candidate::{Candidate, CandidateEducation, CandidateExperience, CandidateResume};
 pub use company::{Company, CompanyMembership, CompanyRole, CompanyVerificationStatus, NewCompany};

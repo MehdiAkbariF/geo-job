@@ -2,14 +2,15 @@ use biz_application::application::ApplicationUseCases;
 use biz_application::candidate::CandidateUseCases;
 use biz_application::company::CompanyUseCases;
 use biz_application::discovery::DiscoveryUseCases;
+use biz_application::finance::FinanceUseCases;
 use biz_application::governance::GovernanceUseCases;
 use biz_application::opportunity::OpportunityUseCases;
 use biz_application::saved::SavedUseCases;
 use biz_application::taxonomy::TaxonomyUseCases;
 use biz_storage::{
     ApplicationRepository, CandidateRepository, CompanyRepository, DiscoveryRepository,
-    GovernanceRepository, OpportunityRepository, SavedRepository, TaxonomyRepository,
-    TokenRepository, TokenService, UserRepository,
+    FinanceRepository, GovernanceRepository, OpportunityRepository, SavedRepository,
+    TaxonomyRepository, TokenRepository, TokenService, UserRepository,
 };
 use sqlx::PgPool;
 
@@ -26,7 +27,7 @@ pub struct AppState {
     pub gov_use_cases: GovernanceUseCases,
     pub company_use_cases: CompanyUseCases,
     pub taxonomy_use_cases: TaxonomyUseCases,
-    pub saved_repo: SavedRepository,
+    pub finance_use_cases: FinanceUseCases,
 }
 
 impl AppState {
@@ -41,6 +42,7 @@ impl AppState {
         let discovery_repo = DiscoveryRepository::new(pool.clone());
         let gov_repo = GovernanceRepository::new(pool.clone());
         let taxonomy_repo = TaxonomyRepository::new(pool.clone());
+        let finance_repo = FinanceRepository::new(pool.clone());
 
         let token_service = TokenService::new(jwt_secret);
 
@@ -50,10 +52,7 @@ impl AppState {
             token_service.clone(),
         );
 
-        // اتصال سیستم رادار و اعلان‌ها به چرخه حیات آگهی‌ها
-        let opp_use_cases = OpportunityUseCases::new(opp_repo.clone(), company_repo.clone())
-            .with_saved_repo(saved_repo.clone());
-
+        let opp_use_cases = OpportunityUseCases::new(opp_repo.clone(), company_repo.clone());
         let discovery_use_cases = DiscoveryUseCases::new(discovery_repo, candidate_repo.clone());
         
         let candidate_use_cases = CandidateUseCases::new(candidate_repo.clone(), app_repo.clone())
@@ -65,10 +64,11 @@ impl AppState {
             candidate_repo.clone(),
             company_repo.clone(),
         );
-        let saved_use_cases = SavedUseCases::new(saved_repo.clone(), candidate_repo.clone());
+        let saved_use_cases = SavedUseCases::new(saved_repo, candidate_repo.clone());
         let gov_use_cases = GovernanceUseCases::new(gov_repo.clone(), company_repo.clone());
-        let company_use_cases = CompanyUseCases::new(company_repo, opp_repo, gov_repo);
+        let company_use_cases = CompanyUseCases::new(company_repo.clone(), opp_repo, gov_repo);
         let taxonomy_use_cases = TaxonomyUseCases::new(taxonomy_repo);
+        let finance_use_cases = FinanceUseCases::new(finance_repo, company_repo);
 
         Self {
             pool,
@@ -82,7 +82,7 @@ impl AppState {
             gov_use_cases,
             company_use_cases,
             taxonomy_use_cases,
-            saved_repo,
+            finance_use_cases,
         }
     }
 

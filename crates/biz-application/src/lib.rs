@@ -8,5 +8,6 @@ pub mod identity;
 pub mod opportunity;
 pub mod saved;
 pub mod taxonomy;
-
+pub mod finance;
+pub use finance::FinanceUseCases;
 pub use error::ApplicationError;

@@ -44,7 +44,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     run_migrations(&pool).await?;
     tracing::info!("Business migrations applied successfully.");
 
-    // تضمین ۱۰۰٪ هش معتبر برای تمام کاربران تستی (کارجو و کارفرمایان)
     if let Ok(raw_pass) = biz_domain::identity::RawPassword::new("Password1234!") {
         if let Ok(real_hash) = biz_storage::PasswordService::hash_password(&raw_pass) {
             let _ = sqlx::query("UPDATE users SET password_hash = $1 WHERE email IN ('demo@geojob.ir', 'employer@geojob.ir', 'verified_employer@geojob.ir', 'pending_employer@geojob.ir')")
@@ -125,12 +124,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/me/saved-companies", get(handlers::saved::list_saved_companies_handler))
         .route("/me/saved-searches", post(handlers::saved::save_search_handler).get(handlers::saved::list_saved_searches_handler))
 
-        // 🎯 سیستم رادارهای فضایی و نوتیفیکیشن سنتر درون‌برنامه‌ای
-        .route("/me/radars", post(handlers::saved::create_radar_handler).get(handlers::saved::list_my_radars_handler))
-        .route("/me/radars/:id", delete(handlers::saved::delete_radar_handler))
-        .route("/me/notifications", get(handlers::saved::list_my_notifications_handler))
-        .route("/me/notifications/:id/read", post(handlers::saved::mark_notification_read_handler))
-        .route("/me/notifications/unread-count", get(handlers::saved::get_unread_notifications_count_handler))
+        // 💳 زیرساخت مالی، کیف پول، تعرفه‌ها، فاکتورها و خرید دسترسی کارجویان
+        .route("/companies/:id/wallet", get(handlers::finance::get_company_wallet_handler))
+        .route("/finance/tariffs", get(handlers::finance::list_tariffs_handler))
+        .route("/companies/:id/finance/invoices", post(handlers::finance::create_invoice_handler))
+        .route("/companies/:id/finance/invoices/:invoice_id/pay-mock", post(handlers::finance::mock_pay_invoice_handler))
+        .route("/companies/:id/finance/transactions", get(handlers::finance::list_wallet_transactions_handler))
+        .route("/companies/:id/talents/:candidate_id/unlock", post(handlers::finance::unlock_talent_contact_handler))
 
         // Taxonomies
         .route("/taxonomies/categories", get(handlers::taxonomy::list_categories_handler))
