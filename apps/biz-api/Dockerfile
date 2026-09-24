@@ -20,6 +20,7 @@ COPY crates/ ./crates/
 COPY apps/biz-api/ ./apps/biz-api/
 COPY apps/map-api/ ./apps/map-api/
 COPY apps/geo-importer/ ./apps/geo-importer/
+COPY migrations/ ./migrations/
 
 # Build فقط biz-api
 RUN cargo build --release --bin biz-api
