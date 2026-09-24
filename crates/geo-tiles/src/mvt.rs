@@ -12,7 +12,7 @@ pub enum MvtError {
 }
 
 /// Ultra-stable MVT generator.
-/// Enforces MVT-compliant LineString geometries using ST_CollectionExtract to prevent 'Unimplemented type: 4'.
+/// Enforces MVT-compliant LineString geometries using ST_CollectionExtract to prevent 'Unimplementedtype: 4'.
 pub async fn get_base_map_mvt_tile(
     pool: &PgPool,
     tile: &TileCoordinate,
@@ -76,14 +76,14 @@ pub async fn get_base_map_mvt_tile(
         FROM roads_mvt, boundaries_mvt
     "#;
 
-    let row: (Vec<u8>,) = sqlx::query_as(sql)
+    let bytes: Vec<u8> = sqlx::query_scalar(sql)
         .bind(tile.z as i32)
         .bind(tile.x as i32)
         .bind(tile.y as i32)
         .fetch_one(pool)
         .await?;
 
-    Ok(row.0)
+    Ok(bytes)
 }
 
 /// Single layer MVT for employer opportunities.
@@ -121,12 +121,12 @@ pub async fn get_locations_mvt_tile(
         WHERE mvtgeom.geom IS NOT NULL AND NOT ST_IsEmpty(mvtgeom.geom)
     "#;
 
-    let row: (Vec<u8>,) = sqlx::query_as(sql)
+    let bytes: Vec<u8> = sqlx::query_scalar(sql)
         .bind(tile.z as i32)
         .bind(tile.x as i32)
         .bind(tile.y as i32)
         .fetch_one(pool)
         .await?;
 
-    Ok(row.0)
+    Ok(bytes)
 }
