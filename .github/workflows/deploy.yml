@@ -85,9 +85,9 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ============================================
-  # Job 3: Deploy
+  # Job 3: Deploy to Server
   # ============================================
-    deploy:
+  deploy:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
