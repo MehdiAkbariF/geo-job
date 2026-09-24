@@ -7,7 +7,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ${{ github.repository_owner }}/spatijob
+  IMAGE_PREFIX: mehdiakbarif/spatijob
 
 jobs:
   # ============================================
