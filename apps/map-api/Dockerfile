@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     ca-certificates \
     build-essential \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
