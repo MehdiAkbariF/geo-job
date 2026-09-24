@@ -1,7 +1,8 @@
 services:
   postgres:
     image: postgis/postgis:16-3.4
-    container_name: map_postgis
+    container_name: spatijob_postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: map_platform
       POSTGRES_USER: map_user
@@ -15,6 +16,43 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - spatijob_network
+
+  map-api:
+    image: ghcr.io/mehdiakbarif/spatijob-map-api:latest
+    container_name: spatijob_map_api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://map_user:map_password@postgres:5432/map_platform
+      RUST_LOG: map_api=info,tower_http=info
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - spatijob_network
+
+  biz-api:
+    image: ghcr.io/mehdiakbarif/spatijob-biz-api:latest
+    container_name: spatijob_biz_api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://map_user:map_password@postgres:5432/map_platform
+      JWT_SECRET: spatijob-super-secret-jwt-key-change-in-production
+      RUST_LOG: biz_api=info,tower_http=info
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - spatijob_network
 
 volumes:
   postgis_data:
+
+networks:
+  spatijob_network:
+    driver: bridge

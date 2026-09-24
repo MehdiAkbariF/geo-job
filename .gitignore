@@ -1,6 +1,6 @@
 # Rust Build Artifacts
 /target
-Cargo.lock
+#Cargo.lock
 **/*.rs.bk
 
 # Geospatial Large Data Files & Dumps (Never commit to Git)
