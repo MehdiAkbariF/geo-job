@@ -92,13 +92,14 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
-      - name: Setup SSH key
+       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.SSH_KEY }}" > ~/.ssh/deploy_key
+          echo "${{ secrets.SSH_KEY }}" | base64 -d > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
           echo "SSH key file size: $(wc -c < ~/.ssh/deploy_key) bytes"
+          head -1 ~/.ssh/deploy_key
 
       - name: Verify SSH connection
         run: |
