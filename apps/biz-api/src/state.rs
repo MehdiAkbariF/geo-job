@@ -46,13 +46,15 @@ impl AppState {
 
         let token_service = TokenService::new(jwt_secret);
 
+        // اتصال احراز هویت به مخازن برای آنبوردینگ هویتی خودکار
         let auth_use_cases = biz_application::identity::AuthUseCases::new(
             user_repo.clone(),
             token_repo.clone(),
             token_service.clone(),
+            candidate_repo.clone(),
+            company_repo.clone(),
         );
 
-        // اتصال مستقیم موتور مالی به چرخه حیات آگهی‌ها (Pay-to-Publish)
         let opp_use_cases = OpportunityUseCases::new(
             opp_repo.clone(), 
             company_repo.clone(), 

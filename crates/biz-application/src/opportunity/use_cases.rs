@@ -1,6 +1,7 @@
 use super::dto::CreateOpportunityCommand;
 use crate::error::ApplicationError;
-use biz_domain::opportunity::{NewOpportunity, Opportunity, OpportunityStatus};
+use biz_domain::company::CompanyVerificationStatus;
+use biz_domain::opportunity::{NewOpportunity, Opportunity, OpportunityStatus, WorkplaceType};
 use biz_storage::{CompanyRepository, FinanceRepository, OpportunityRepository, StorageError};
 use chrono::{Duration, Utc};
 use uuid::Uuid;
@@ -25,7 +26,7 @@ impl OpportunityUseCases {
         }
     }
 
-    /// ایجاد پیش‌نویس آگهی با مشخصات محلی و اصناف
+    /// ایجاد پیش‌نویس با اعمال گیت‌های امنیتی نوع کسب‌وکار
     pub async fn create_opportunity(
         &self,
         actor_user_id: Uuid,
@@ -43,6 +44,20 @@ impl OpportunityUseCases {
             ));
         }
 
+        let company = self.company_repo.find_by_id(cmd.company_id).await?
+            .ok_or(StorageError::UserNotFound)?;
+
+        // 🛡️ گیت امنیتی ۱: کارفرمای پروژه‌ای هرگز حق ثبت آگهی حضوری ندارد
+        if company.business_type == "individual_client" {
+            if cmd.workplace_type != WorkplaceType::Remote || !cmd.is_urgent.unwrap_or(false) && cmd.location_ids.len() > 0 {
+                return Err(ApplicationError::Validation(
+                    "کارفرمایان پروژه‌ای تنها مجاز به ثبت درخواست‌های پروژه و دورکاری هستند. برای استخدام حضوری، باید کسب‌وکار صنفی یا شرکتی خود را به همراه پروانه کسب ثبت نمایید.".into()
+                ));
+            }
+        }
+
+        let is_proj = company.business_type == "individual_client" || cmd.workplace_type == WorkplaceType::Remote;
+
         let new_opp = NewOpportunity {
             company_id: cmd.company_id,
             title: cmd.title,
@@ -50,7 +65,7 @@ impl OpportunityUseCases {
             category_id: cmd.category_id,
             occupation_id: cmd.occupation_id,
             opportunity_type: cmd.opportunity_type,
-            workplace_type: cmd.workplace_type,
+            workplace_type: if company.business_type == "individual_client" { WorkplaceType::Remote } else { cmd.workplace_type },
             remote_scope: cmd.remote_scope,
             experience_level: cmd.experience_level,
             salary: cmd.salary,
@@ -58,7 +73,7 @@ impl OpportunityUseCases {
             working_hours: cmd.working_hours,
             gender_preference: cmd.gender_preference.unwrap_or_else(|| "any".to_string()),
             has_insurance: cmd.has_insurance.unwrap_or(false),
-            location_ids: cmd.location_ids,
+            location_ids: if company.business_type == "individual_client" { vec![] } else { cmd.location_ids },
             skill_ids: cmd.skill_ids,
         };
 
@@ -67,16 +82,25 @@ impl OpportunityUseCases {
         Ok(created)
     }
 
-    /// اکشن انتشار آگهی: کسر خودکار هزینه انتشار (تعرفه srv_ad_standard) از کیف پول کارفرما
+    /// اکشن انتشار آگهی: کسر خودکار هزینه با بررسی تکمیل مدارک قانونی کارفرما
     pub async fn publish(&self, actor_user_id: Uuid, opp_id: Uuid) -> Result<(), ApplicationError> {
         let opp = self.opp_repo.find_by_id(opp_id).await?.ok_or(StorageError::UserNotFound)?;
         self.authorize_company_actor(actor_user_id, opp.company_id).await?;
+
+        let company = self.company_repo.find_by_id(opp.company_id).await?.ok_or(StorageError::UserNotFound)?;
+
+        // 🛡️ گیت امنیتی ۲: شرکت‌ها و اصناف حضوری حتماً باید حداقل مدارک پروانه/ثبت را ارسال کرده باشند
+        if company.business_type != "individual_client" && company.verification_status == CompanyVerificationStatus::NotStarted {
+            return Err(ApplicationError::Validation(
+                "برای انتشار آگهی استخدام حضوری، ابتدا باید مدارک پروانه کسب یا روزنامه رسمی شرکت را در بخش «ارسال مدارک» بارگذاری نمایید.".into()
+            ));
+        }
 
         // استعلام تعرفه انتشار آگهی استاندارد
         let tariff = self.finance_repo.find_tariff_by_code("srv_ad_standard").await?
             .ok_or_else(|| ApplicationError::Validation("تعرفه ثبت آگهی یافت نشد".into()))?;
 
-        // کسر اتمیک و امن از کیف پول (در صورت کمبود موجودی خطای شفاف برمی‌گردد)
+        // کسر اتمیک و امن از موجودی
         self.finance_repo.deduct_balance(
             opp.company_id,
             tariff.price,
@@ -93,7 +117,6 @@ impl OpportunityUseCases {
         Ok(())
     }
 
-    /// نردبان آگهی روی نقشه: کسر ۵۰ هزار تومان و انتقال فوری به صدر نتایج
     pub async fn ladder(&self, actor_user_id: Uuid, opp_id: Uuid) -> Result<(), ApplicationError> {
         let opp = self.opp_repo.find_by_id(opp_id).await?.ok_or(StorageError::UserNotFound)?;
         self.authorize_company_actor(actor_user_id, opp.company_id).await?;
@@ -113,7 +136,6 @@ impl OpportunityUseCases {
         Ok(())
     }
 
-    /// ارتقا به سنجاق طلایی روی نقشه: کسر ۱۵۰ هزار تومان و نمایش برجسته در تمام زوم‌ها
     pub async fn feature_pin(&self, actor_user_id: Uuid, opp_id: Uuid) -> Result<(), ApplicationError> {
         let opp = self.opp_repo.find_by_id(opp_id).await?.ok_or(StorageError::UserNotFound)?;
         self.authorize_company_actor(actor_user_id, opp.company_id).await?;

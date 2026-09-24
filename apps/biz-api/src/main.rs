@@ -60,7 +60,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app_state = AppState::new(pool, jwt_secret);
 
     let api_router = Router::new()
-        // Auth
+        // 🔐 احراز هویت پیامکی (OTP)، آنبوردینگ هویتی ۳ پرسونایی و ورود ایمیلی
+        .route("/auth/otp/send", post(handlers::auth::send_otp_handler))
+        .route("/auth/otp/verify", post(handlers::auth::verify_otp_handler))
+        .route("/auth/onboarding", post(handlers::auth::onboarding_handler))
         .route("/auth/register", post(handlers::auth::register_handler))
         .route("/auth/login", post(handlers::auth::login_handler))
         .route("/auth/refresh", post(handlers::auth::refresh_handler))
@@ -106,7 +109,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/opportunities/:id", get(handlers::opportunity::get_opportunity_handler))
         .route("/opportunities/:id/track-click", post(handlers::opportunity::track_opportunity_click_handler))
 
-        // Opportunities Lifecycle & Paid Map Promotions (بدون هیچ روت تکراری)
+        // Opportunities Lifecycle & Paid Map Promotions
         .route("/opportunities/:id/publish", post(handlers::opportunity::publish_opportunity_handler))
         .route("/opportunities/:id/pause", post(handlers::opportunity::pause_opportunity_handler))
         .route("/opportunities/:id/resume", post(handlers::opportunity::resume_opportunity_handler))
