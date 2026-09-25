@@ -159,6 +159,9 @@ impl DiscoveryRepository {
         let cand_radius = cand_ctx.map(|c| c.commute_radius_meters as f64).unwrap_or(5000.0);
         let has_cand = cand_ctx.is_some();
 
+        // گلوگاه اصلی ۱۰ ثانیه‌ای رفع شد: نمره‌دهی سنگین منحصراً وقتی اجرا می‌شود که کاربر نیاز به سورت سازگاری دارد
+        let should_score = has_cand && (q.sort == SortBy::MatchScore || min_match_score.is_some());
+
         let order_clause = match q.sort {
             SortBy::MatchScore if has_cand => {
                 "d.match_score DESC NULLS LAST, d.published_at DESC, d.id DESC"
@@ -201,20 +204,18 @@ impl DiscoveryRepository {
                             ST_Distance(loc.coordinates::geography, ST_SetSRID(ST_MakePoint($13, $14), 4326)::geography)
                         ELSE NULL
                     END AS distance_meters,
-                    -- موتور تطبیق چندمعیاره با نرمالایز ریاضی (بدون هیچ عدد هاردکد)
-                  CASE 
+                    -- فرمول تطبیق منحصراً در صورت نیاز اجرا می‌گردد
+                    CASE 
                         WHEN $22::boolean = true THEN
                             (
                                 SELECT 
                                     CASE 
-                                        -- اگر شغل هیچ ربط تخصصی به مهارت‌های کارجو نداشت، بیش از ۱۵٪ نگیرد
                                         WHEN total_weight > 0.0 THEN
                                             LEAST(100, GREATEST(0, ROUND((earned_points / total_weight) * 100.0)))::int2
                                         ELSE 0::int2
                                     END
                                 FROM (
                                     SELECT 
-                                        -- مجموع وزن معیارهای پیکربندی‌شده
                                         (
                                             (CASE WHEN CARDINALITY($23::uuid[]) > 0 THEN 45.0 ELSE 0.0 END) +
                                             (CASE WHEN CARDINALITY($29::uuid[]) > 0 THEN 25.0 ELSE 0.0 END) +
@@ -222,9 +223,7 @@ impl DiscoveryRepository {
                                             (CASE WHEN CARDINALITY($25::text[]) > 0 THEN 10.0 ELSE 0.0 END) +
                                             (CASE WHEN $24::numeric IS NOT NULL THEN 5.0 ELSE 0.0 END)
                                         )::float8 AS total_weight,
-                                        -- نمرات واقعی بر اساس تخصص
                                         (
-                                            -- ۱. تطابق مهارت‌های تخصصی (وزن اصلی: ۴۵ نمره)
                                             COALESCE(
                                                 (SELECT (COUNT(DISTINCT os.skill_id)::float8 / NULLIF(COUNT(DISTINCT os2.skill_id), 0)) * 45.0
                                                  FROM opportunity_skills os2
@@ -232,9 +231,7 @@ impl DiscoveryRepository {
                                                  WHERE os2.opportunity_id = o.id), 
                                                 0.0
                                             ) +
-                                            -- ۲. تطابق دسته‌بندی
                                             (CASE WHEN CARDINALITY($29::uuid[]) > 0 AND o.category_id = ANY($29) THEN 25.0 ELSE 0.0 END) +
-                                            -- ۳. امتیاز لوکیشن (فقط در صورتی اثر مثبت بگذارد که شغل بی‌ربط نباشد)
                                             (CASE 
                                                 WHEN o.workplace_type = 'remote' THEN 15.0
                                                 WHEN $31::float8 IS NOT NULL AND $32::float8 IS NOT NULL AND loc.coordinates IS NOT NULL AND 
@@ -242,16 +239,18 @@ impl DiscoveryRepository {
                                                 WHEN $26::text IS NOT NULL AND loc.address_summary ILIKE '%' || $26 || '%' THEN 10.0
                                                 ELSE 0.0 
                                              END) +
-                                            -- ۴. شیوه کار
                                             (CASE WHEN CARDINALITY($25::text[]) > 0 AND o.workplace_type = ANY($25) THEN 10.0 ELSE 0.0 END) +
-                                            -- ۵. حقوق
                                             (CASE WHEN $24::numeric IS NOT NULL AND COALESCE(o.salary_max, o.salary_min) >= $24 THEN 5.0 ELSE 0.0 END)
                                         )::float8 AS earned_points
                                 ) scoring_calc
                             )
                         ELSE NULL 
                     END AS match_score,
-                    (SELECT COUNT(DISTINCT os.skill_id) FROM opportunity_skills os WHERE os.opportunity_id = o.id AND os.skill_id = ANY($23)) AS matched_skills_count,
+                    CASE 
+                        WHEN $22::boolean = true THEN
+                            (SELECT COUNT(DISTINCT os.skill_id) FROM opportunity_skills os WHERE os.opportunity_id = o.id AND os.skill_id = ANY($23))
+                        ELSE NULL 
+                    END AS matched_skills_count,
                     (CASE WHEN CARDINALITY($29::uuid[]) > 0 AND o.category_id = ANY($29) THEN true ELSE false END) AS category_matches,
                     (CASE WHEN $24::numeric IS NOT NULL AND COALESCE(o.salary_max, o.salary_min) >= $24 THEN true ELSE false END) AS salary_matches,
                     (CASE WHEN CARDINALITY($25::text[]) > 0 AND o.workplace_type = ANY($25) THEN true ELSE false END) AS workplace_matches,
@@ -345,7 +344,7 @@ impl DiscoveryRepository {
             .bind(q.include_remote)      // $19
             .bind((limit + 1) as i64)    // $20
             .bind(effective_city)        // $21
-            .bind(has_cand)              // $22
+            .bind(should_score)          // $22 (بهینه‌سازی شده)
             .bind(cand_skill_ids)        // $23
             .bind(cand_min_salary)       // $24
             .bind(cand_workplaces)       // $25

@@ -47,7 +47,6 @@ impl IntoResponse for ApiError {
             ApiError::Application(ApplicationError::Validation(msg))
             | ApiError::Validation(msg) => (StatusCode::BAD_REQUEST, "VALIDATION_ERROR", msg),
             
-            // رفع ارور ۵۰۰: تبدیل خطاهای دامنه (مثل تغییر مرحله نامعتبر) به ۴۰۰
             ApiError::Application(ApplicationError::Domain(DomainError::InvariantViolation(msg))) => {
                 (StatusCode::BAD_REQUEST, "INVALID_STATE_TRANSITION", msg)
             }
@@ -68,6 +67,13 @@ impl IntoResponse for ApiError {
                 "EMAIL_ALREADY_EXISTS",
                 "کاربری با این ایمیل قبلاً در سیستم ثبت‌نام کرده است".to_string(),
             ),
+
+            ApiError::Application(ApplicationError::Storage(StorageError::PhoneAlreadyExists))
+            | ApiError::Storage(StorageError::PhoneAlreadyExists) => (
+                StatusCode::CONFLICT,
+                "PHONE_ALREADY_EXISTS",
+                "کاربری با این شماره همراه قبلاً در سیستم ثبت‌نام کرده است".to_string(),
+            ),
             
             ApiError::Application(ApplicationError::Storage(StorageError::DuplicateApplication))
             | ApiError::Storage(StorageError::DuplicateApplication) => (
@@ -81,6 +87,27 @@ impl IntoResponse for ApiError {
                 StatusCode::NOT_FOUND,
                 "USER_NOT_FOUND",
                 "کاربر مورد نظر یافت نشد".to_string(),
+            ),
+
+            ApiError::Application(ApplicationError::Storage(StorageError::OpportunityNotFound))
+            | ApiError::Storage(StorageError::OpportunityNotFound) => (
+                StatusCode::NOT_FOUND,
+                "OPPORTUNITY_NOT_FOUND",
+                "فرصت شغلی مورد نظر یافت نشد یا منقضی شده است".to_string(),
+            ),
+
+            ApiError::Application(ApplicationError::Storage(StorageError::CompanyNotFound))
+            | ApiError::Storage(StorageError::CompanyNotFound) => (
+                StatusCode::NOT_FOUND,
+                "COMPANY_NOT_FOUND",
+                "سازمان یا شرکت مورد نظر یافت نشد".to_string(),
+            ),
+
+            ApiError::Application(ApplicationError::Storage(StorageError::CandidateNotFound))
+            | ApiError::Storage(StorageError::CandidateNotFound) => (
+                StatusCode::NOT_FOUND,
+                "CANDIDATE_NOT_FOUND",
+                "پروفایل کارجو یافت نشد".to_string(),
             ),
             
             err => (

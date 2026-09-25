@@ -41,49 +41,54 @@ impl CandidateUseCases {
         self
     }
 
-    pub async fn get_full_profile(&self, user_id: Uuid) -> Result<CandidateProfileDto, ApplicationError> {
-        let candidate = match self.candidate_repo.find_by_user_id(user_id).await? {
-            Some(c) => c,
-            None => {
-                let new_cand = Candidate {
-                    id: Uuid::new_v4(),
-                    user_id,
-                    first_name: "کاربر".to_string(),
-                    last_name: "جدید".to_string(),
-                    headline: None,
-                    bio: None,
-                    avatar_storage_key: None,
-                    residence_location_id: None,
-                    preferred_city: None,
-                    preferred_commute_center_id: None,
-                    preferred_commute_radius_meters: Some(5000),
-                    show_exact_location_to_employers: false,
-                    is_foreign_national: false,
-                    nationality_country_code: None,
-                    has_disability: false,
-                    disability_type: None,
-                    gender: None,
-                    military_service_status: None,
-                    marital_status: None,
-                    birth_date: None,
-                    preferred_category_ids: Vec::new(),
-                    linkedin_url: None,
-                    github_url: None,
-                    website_url: None,
-                    audio_intro_storage_key: None,
-                    job_search_status: "actively_looking".to_string(),
-                    awards: serde_json::json!([]),
-                    certifications: serde_json::json!([]),
-                    academic_projects: serde_json::json!([]),
-                    publications: serde_json::json!([]),
-                    volunteering: serde_json::json!([]),
-                    portfolio_items: serde_json::json!([]),
-                    created_at: Utc::now(),
-                    updated_at: Utc::now(),
-                };
-                self.candidate_repo.upsert_profile(&new_cand).await?
-            }
+    /// هلپر اختصاصی جهت تضمین وجود پروفایل کارجو و جلوگیری ریشه‌ای از خطای UserNotFound در درخواست‌های همزمان
+    async fn ensure_candidate(&self, user_id: Uuid) -> Result<Candidate, ApplicationError> {
+        if let Some(c) = self.candidate_repo.find_by_user_id(user_id).await? {
+            return Ok(c);
+        }
+
+        let new_cand = Candidate {
+            id: Uuid::new_v4(),
+            user_id,
+            first_name: "کاربر".to_string(),
+            last_name: "جدید".to_string(),
+            headline: None,
+            bio: None,
+            avatar_storage_key: None,
+            residence_location_id: None,
+            preferred_city: None,
+            preferred_commute_center_id: None,
+            preferred_commute_radius_meters: Some(5000),
+            show_exact_location_to_employers: false,
+            is_foreign_national: false,
+            nationality_country_code: None,
+            has_disability: false,
+            disability_type: None,
+            gender: None,
+            military_service_status: None,
+            marital_status: None,
+            birth_date: None,
+            preferred_category_ids: Vec::new(),
+            linkedin_url: None,
+            github_url: None,
+            website_url: None,
+            audio_intro_storage_key: None,
+            job_search_status: "actively_looking".to_string(),
+            awards: serde_json::json!([]),
+            certifications: serde_json::json!([]),
+            academic_projects: serde_json::json!([]),
+            publications: serde_json::json!([]),
+            volunteering: serde_json::json!([]),
+            portfolio_items: serde_json::json!([]),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
         };
+
+        Ok(self.candidate_repo.upsert_profile(&new_cand).await?)
+    }
+
+    pub async fn get_full_profile(&self, user_id: Uuid) -> Result<CandidateProfileDto, ApplicationError> {
+        let candidate = self.ensure_candidate(user_id).await?;
 
         let skills_with_names = self.candidate_repo.get_skills_with_names(candidate.id).await?;
         let exps = self.candidate_repo.list_experiences(candidate.id).await?;
@@ -211,13 +216,7 @@ impl CandidateUseCases {
         user_id: Uuid,
         cmd: UpdateProfileCommand,
     ) -> Result<CandidateProfileDto, ApplicationError> {
-        let mut candidate = match self.candidate_repo.find_by_user_id(user_id).await? {
-            Some(c) => c,
-            None => {
-                let _ = self.get_full_profile(user_id).await?;
-                self.candidate_repo.find_by_user_id(user_id).await?.unwrap()
-            }
-        };
+        let mut candidate = self.ensure_candidate(user_id).await?;
 
         candidate.first_name = cmd.first_name;
         candidate.last_name = cmd.last_name;
@@ -301,7 +300,7 @@ impl CandidateUseCases {
         opportunity_id: Uuid,
     ) -> Result<Vec<TalentSearchResult>, ApplicationError> {
         let opp_repo = self.opp_repo.as_ref().ok_or_else(|| ApplicationError::Validation("Missing repo".into()))?;
-        let _opp = opp_repo.find_by_id(opportunity_id).await?.ok_or(StorageError::UserNotFound)?;
+        let _opp = opp_repo.find_by_id(opportunity_id).await?.ok_or(StorageError::OpportunityNotFound)?;
 
         let opp_coords = opp_repo.get_first_location_coords(opportunity_id).await?;
         let center = match opp_coords {
@@ -333,7 +332,7 @@ impl CandidateUseCases {
         let opp_repo = self.opp_repo.as_ref().ok_or_else(|| ApplicationError::Validation("Missing repo".into()))?;
         let company_repo = self.company_repo.as_ref().ok_or_else(|| ApplicationError::Validation("Missing repo".into()))?;
 
-        let opp = opp_repo.find_by_id(cmd.opportunity_id).await?.ok_or(StorageError::UserNotFound)?;
+        let opp = opp_repo.find_by_id(cmd.opportunity_id).await?.ok_or(StorageError::OpportunityNotFound)?;
         let role = company_repo.get_user_role(opp.company_id, employer_user_id).await?
             .ok_or_else(|| ApplicationError::Unauthorized("Not authorized for this company".into()))?;
 
@@ -353,7 +352,7 @@ impl CandidateUseCases {
     }
 
     pub async fn add_experience(&self, user_id: Uuid, cmd: AddExperienceCommand) -> Result<Uuid, ApplicationError> {
-        let candidate = self.candidate_repo.find_by_user_id(user_id).await?.ok_or(StorageError::UserNotFound)?;
+        let candidate = self.ensure_candidate(user_id).await?;
         let exp = CandidateExperience {
             id: Uuid::new_v4(),
             candidate_id: candidate.id,
@@ -376,13 +375,13 @@ impl CandidateUseCases {
     }
 
     pub async fn delete_experience(&self, user_id: Uuid, exp_id: Uuid) -> Result<(), ApplicationError> {
-        let candidate = self.candidate_repo.find_by_user_id(user_id).await?.ok_or(StorageError::UserNotFound)?;
+        let candidate = self.ensure_candidate(user_id).await?;
         self.candidate_repo.delete_experience(candidate.id, exp_id).await?;
         Ok(())
     }
 
     pub async fn add_education(&self, user_id: Uuid, cmd: AddEducationCommand) -> Result<Uuid, ApplicationError> {
-        let candidate = self.candidate_repo.find_by_user_id(user_id).await?.ok_or(StorageError::UserNotFound)?;
+        let candidate = self.ensure_candidate(user_id).await?;
         let edu = CandidateEducation {
             id: Uuid::new_v4(),
             candidate_id: candidate.id,
@@ -399,13 +398,13 @@ impl CandidateUseCases {
     }
 
     pub async fn delete_education(&self, user_id: Uuid, edu_id: Uuid) -> Result<(), ApplicationError> {
-        let candidate = self.candidate_repo.find_by_user_id(user_id).await?.ok_or(StorageError::UserNotFound)?;
+        let candidate = self.ensure_candidate(user_id).await?;
         self.candidate_repo.delete_education(candidate.id, edu_id).await?;
         Ok(())
     }
 
     pub async fn add_language(&self, user_id: Uuid, cmd: AddLanguageCommand) -> Result<Uuid, ApplicationError> {
-        let candidate = self.candidate_repo.find_by_user_id(user_id).await?.ok_or(StorageError::UserNotFound)?;
+        let candidate = self.ensure_candidate(user_id).await?;
         let lang = CandidateLanguage {
             id: Uuid::new_v4(),
             candidate_id: candidate.id,
@@ -417,13 +416,13 @@ impl CandidateUseCases {
     }
 
     pub async fn delete_language(&self, user_id: Uuid, lang_id: Uuid) -> Result<(), ApplicationError> {
-        let candidate = self.candidate_repo.find_by_user_id(user_id).await?.ok_or(StorageError::UserNotFound)?;
+        let candidate = self.ensure_candidate(user_id).await?;
         self.candidate_repo.delete_language(candidate.id, lang_id).await?;
         Ok(())
     }
 
     pub async fn add_reference(&self, user_id: Uuid, cmd: AddReferenceCommand) -> Result<Uuid, ApplicationError> {
-        let candidate = self.candidate_repo.find_by_user_id(user_id).await?.ok_or(StorageError::UserNotFound)?;
+        let candidate = self.ensure_candidate(user_id).await?;
         let r = CandidateReference {
             id: Uuid::new_v4(),
             candidate_id: candidate.id,
@@ -441,13 +440,13 @@ impl CandidateUseCases {
     }
 
     pub async fn delete_reference(&self, user_id: Uuid, ref_id: Uuid) -> Result<(), ApplicationError> {
-        let candidate = self.candidate_repo.find_by_user_id(user_id).await?.ok_or(StorageError::UserNotFound)?;
+        let candidate = self.ensure_candidate(user_id).await?;
         self.candidate_repo.delete_reference(candidate.id, ref_id).await?;
         Ok(())
     }
 
     pub async fn add_resume(&self, user_id: Uuid, cmd: AddResumeCommand) -> Result<Uuid, ApplicationError> {
-        let candidate = self.candidate_repo.find_by_user_id(user_id).await?.ok_or(StorageError::UserNotFound)?;
+        let candidate = self.ensure_candidate(user_id).await?;
         let res = CandidateResume {
             id: Uuid::new_v4(),
             candidate_id: candidate.id,
@@ -461,19 +460,19 @@ impl CandidateUseCases {
     }
 
     pub async fn delete_resume(&self, user_id: Uuid, resume_id: Uuid) -> Result<(), ApplicationError> {
-        let candidate = self.candidate_repo.find_by_user_id(user_id).await?.ok_or(StorageError::UserNotFound)?;
+        let candidate = self.ensure_candidate(user_id).await?;
         self.candidate_repo.delete_resume(candidate.id, resume_id).await?;
         Ok(())
     }
 
     pub async fn set_skills(&self, user_id: Uuid, skill_ids: &[Uuid]) -> Result<(), ApplicationError> {
-        let candidate = self.candidate_repo.find_by_user_id(user_id).await?.ok_or(StorageError::UserNotFound)?;
+        let candidate = self.ensure_candidate(user_id).await?;
         self.candidate_repo.set_skills(candidate.id, skill_ids).await?;
         Ok(())
     }
 
     pub async fn get_preferences(&self, user_id: Uuid) -> Result<CandidatePreferencesDto, ApplicationError> {
-        let candidate = self.candidate_repo.find_by_user_id(user_id).await?.ok_or(StorageError::UserNotFound)?;
+        let candidate = self.ensure_candidate(user_id).await?;
         let prefs = self.candidate_repo.get_preferences(candidate.id).await?;
         match prefs {
             Some(p) => Ok(CandidatePreferencesDto {
@@ -498,7 +497,7 @@ impl CandidateUseCases {
         user_id: Uuid,
         dto: CandidatePreferencesDto,
     ) -> Result<(), ApplicationError> {
-        let candidate = self.candidate_repo.find_by_user_id(user_id).await?.ok_or(StorageError::UserNotFound)?;
+        let candidate = self.ensure_candidate(user_id).await?;
         self.candidate_repo.upsert_preferences(
             candidate.id,
             &dto.preferred_workplace_types,
@@ -511,7 +510,7 @@ impl CandidateUseCases {
     }
 
     pub async fn list_my_applications(&self, user_id: Uuid) -> Result<Vec<TrackedApplicationDto>, ApplicationError> {
-        let candidate = self.candidate_repo.find_by_user_id(user_id).await?.ok_or(StorageError::UserNotFound)?;
+        let candidate = self.ensure_candidate(user_id).await?;
         let apps = self.app_repo.list_by_candidate(candidate.id).await?;
         Ok(apps
             .into_iter()

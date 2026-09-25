@@ -24,6 +24,15 @@ pub enum StorageError {
     #[error("User not found")]
     UserNotFound,
 
+    #[error("Opportunity not found")]
+    OpportunityNotFound,
+
+    #[error("Company not found")]
+    CompanyNotFound,
+
+    #[error("Candidate profile not found")]
+    CandidateNotFound,
+
     #[error("Validation error: {0}")]
     Validation(String),
 

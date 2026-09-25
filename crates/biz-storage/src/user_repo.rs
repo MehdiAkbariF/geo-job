@@ -67,7 +67,7 @@ impl UserRepository {
             RETURNING id, email, phone, password_hash, user_type, national_id, is_phone_verified, is_onboarded, status, created_at, updated_at
         "#;
 
-        let row = sqlx::query_as::<_, UserDbRow>(sql)
+let row = sqlx::query_as::<_, UserDbRow>(sql)
             .bind(email)
             .bind(phone)
             .bind(password_hash)
@@ -75,16 +75,17 @@ impl UserRepository {
             .await
             .map_err(|e| {
                 if let sqlx::Error::Database(ref db_err) = e {
-                    if db_err.constraint() == Some("users_email_key") {
-                        return StorageError::EmailAlreadyExists;
-                    }
-                    if db_err.constraint() == Some("users_phone_key") {
-                        return StorageError::PhoneAlreadyExists;
+                    if let Some(constraint) = db_err.constraint() {
+                        if constraint.contains("email") {
+                            return StorageError::EmailAlreadyExists;
+                        }
+                        if constraint.contains("phone") {
+                            return StorageError::PhoneAlreadyExists;
+                        }
                     }
                 }
                 StorageError::Database(e)
             })?;
-
         row.to_domain()
     }
 

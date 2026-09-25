@@ -40,7 +40,7 @@ pub async fn get_opportunity_handler(
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, ApiError> {
     let opp = state.discovery_repo_pool().find_by_id(id).await?
-        .ok_or(biz_storage::StorageError::UserNotFound)?;
+        .ok_or(biz_storage::StorageError::OpportunityNotFound)?;
     Ok(Json(opp))
 }
 
@@ -55,7 +55,7 @@ pub async fn track_opportunity_click_handler(
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, ApiError> {
     let _ = state.discovery_repo_pool().find_by_id(id).await?
-        .ok_or(biz_storage::StorageError::UserNotFound)?;
+        .ok_or(biz_storage::StorageError::OpportunityNotFound)?;
     tracing::info!("Tracked external apply click for opportunity: {}", id);
     Ok(StatusCode::OK)
 }
