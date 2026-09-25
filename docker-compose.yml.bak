@@ -25,7 +25,7 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://map_user:map_password@postgres:5432/map_platform
-      RUST_LOG: debug,sqlx=debug,tower_http=debug
+      RUST_LOG: map_api=info,tower_http=info
     ports:
       - "8080:8080"
     depends_on:
