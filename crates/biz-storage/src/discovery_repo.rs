@@ -23,6 +23,8 @@ struct SearchDbRow {
     pub salary_currency: String,
     pub salary_period: String,
     pub published_at: Option<DateTime<Utc>>,
+    pub is_urgent: Option<bool>,
+    pub is_featured: Option<bool>,
     pub company_id: Uuid,
     pub company_name: String,
     pub company_slug: String,
@@ -88,6 +90,8 @@ impl SearchDbRow {
             salary_currency: self.salary_currency,
             salary_period: self.salary_period,
             published_at: self.published_at,
+            is_urgent: self.is_urgent.unwrap_or(false),
+            is_featured: self.is_featured.unwrap_or(false),
             company: CompanySummary {
                 id: self.company_id,
                 name: self.company_name,
@@ -159,7 +163,6 @@ impl DiscoveryRepository {
         let cand_radius = cand_ctx.map(|c| c.commute_radius_meters as f64).unwrap_or(5000.0);
         let has_cand = cand_ctx.is_some();
 
-        // گلوگاه اصلی ۱۰ ثانیه‌ای رفع شد: نمره‌دهی سنگین منحصراً وقتی اجرا می‌شود که کاربر نیاز به سورت سازگاری دارد
         let should_score = has_cand && (q.sort == SortBy::MatchScore || min_match_score.is_some());
 
         let order_clause = match q.sort {
@@ -191,6 +194,8 @@ impl DiscoveryRepository {
                     o.salary_currency,
                     o.salary_period,
                     o.published_at,
+                    o.is_urgent,
+                    o.is_featured,
                     c.id AS company_id,
                     c.name AS company_name,
                     c.slug AS company_slug,
@@ -204,7 +209,6 @@ impl DiscoveryRepository {
                             ST_Distance(loc.coordinates::geography, ST_SetSRID(ST_MakePoint($13, $14), 4326)::geography)
                         ELSE NULL
                     END AS distance_meters,
-                    -- فرمول تطبیق منحصراً در صورت نیاز اجرا می‌گردد
                     CASE 
                         WHEN $22::boolean = true THEN
                             (
@@ -295,6 +299,7 @@ impl DiscoveryRepository {
                       $21::text IS NULL OR
                       (loc.address_summary ILIKE '%' || $21 || '%')
                   )
+                  AND ($33::boolean IS NULL OR o.is_urgent = $33)
                 ORDER BY o.id, distance_meters ASC NULLS LAST
             ),
             counted_total AS (
@@ -344,7 +349,7 @@ impl DiscoveryRepository {
             .bind(q.include_remote)      // $19
             .bind((limit + 1) as i64)    // $20
             .bind(effective_city)        // $21
-            .bind(should_score)          // $22 (بهینه‌سازی شده)
+            .bind(should_score)          // $22
             .bind(cand_skill_ids)        // $23
             .bind(cand_min_salary)       // $24
             .bind(cand_workplaces)       // $25
@@ -355,6 +360,7 @@ impl DiscoveryRepository {
             .bind(cand_radius)           // $30
             .bind(cand_lon)              // $31
             .bind(cand_lat)              // $32
+            .bind(q.is_urgent)           // $33
             .fetch_all(&self.pool)
             .await?;
 
@@ -457,6 +463,7 @@ impl DiscoveryRepository {
         experience_level: Option<&str>,
         salary_min: Option<Decimal>,
         salary_max: Option<Decimal>,
+        is_urgent: Option<bool>,
         limit: usize,
     ) -> Result<Vec<MapPinSummary>, StorageError> {
         let (lon, lat) = point
@@ -512,6 +519,7 @@ impl DiscoveryRepository {
                       WHERE os.opportunity_id = o.id AND os.skill_id = ANY($16)
                   )
               )
+              AND ($18::boolean IS NULL OR o.is_urgent = $18)
             GROUP BY loc.id, loc.coordinates, loc.address_summary
             ORDER BY opportunity_count DESC
             LIMIT $17
@@ -535,6 +543,7 @@ impl DiscoveryRepository {
             .bind(salary_max)
             .bind(skill_ids)
             .bind(limit as i64)
+            .bind(is_urgent)
             .fetch_all(&self.pool)
             .await?;
 
@@ -569,6 +578,8 @@ impl DiscoveryRepository {
                 o.salary_currency,
                 o.salary_period,
                 o.published_at,
+                o.is_urgent,
+                o.is_featured,
                 c.id AS company_id,
                 c.name AS company_name,
                 c.slug AS company_slug,

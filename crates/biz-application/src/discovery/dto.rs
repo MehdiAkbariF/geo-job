@@ -17,6 +17,7 @@ pub struct SearchOpportunitiesRequest {
     pub salary_min: Option<Decimal>,
     pub salary_max: Option<Decimal>,
     pub include_remote: Option<bool>,
+    pub is_urgent: Option<bool>,
     pub near_me: Option<bool>,
     pub city: Option<String>,
     pub lat: Option<f64>,
@@ -45,5 +46,6 @@ pub struct GetMapPinsRequest {
     pub experience_level: Option<String>,
     pub salary_min: Option<Decimal>,
     pub salary_max: Option<Decimal>,
+    pub is_urgent: Option<bool>,
     pub limit: Option<usize>,
 }

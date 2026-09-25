@@ -33,13 +33,12 @@ pub struct OpportunitySearchResult {
     #[schema(value_type = Option<[f64; 2]>, example = json!([51.3890, 35.6892]))]
     pub coordinates: Option<[f64; 2]>,
     pub distance_meters: Option<f64>,
-    /// Calculated match percentage with candidate profile (0 - 100%)
     pub match_score: Option<u8>,
-    /// Transparent reasons explaining why this opportunity matches the candidate
     pub match_reasons: Vec<String>,
+    pub is_urgent: bool,       // استخدام فوری
+    pub is_featured: bool,     // سنجاق طلایی نقشه
 }
 
-/// Metadata describing the spatial context of the search results
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SpatialContext {
     pub scope: String,
@@ -57,7 +56,6 @@ pub struct SearchPageResult {
     pub spatial_context: SpatialContext,
 }
 
-/// Lightweight Map Pin Summary representation for spatial clustering and fast map rendering
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub struct MapPinSummary {
     pub location_id: Uuid,

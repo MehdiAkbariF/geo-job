@@ -99,6 +99,7 @@ impl DiscoveryUseCases {
             salary_min: req.salary_min,
             salary_max: req.salary_max,
             include_remote: req.include_remote.unwrap_or(false),
+            is_urgent: req.is_urgent,
             city: req.city,
             point,
             radius,
@@ -180,6 +181,7 @@ impl DiscoveryUseCases {
             req.experience_level.as_deref(),
             req.salary_min,
             req.salary_max,
+            req.is_urgent,
             limit,
         ).await?;
 

@@ -112,7 +112,7 @@ impl SavedRepository {
                 _ => None,
             };
 
-            OpportunitySearchResult {
+          OpportunitySearchResult {
                 id: r.id,
                 title: r.title,
                 description_summary: r.description,
@@ -125,6 +125,8 @@ impl SavedRepository {
                 salary_currency: r.salary_currency,
                 salary_period: r.salary_period,
                 published_at: r.published_at,
+                is_urgent: false,     // ✅
+                is_featured: false,   // ✅
                 company: CompanySummary {
                     id: r.company_id,
                     name: r.company_name,

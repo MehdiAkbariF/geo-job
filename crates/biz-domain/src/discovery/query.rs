@@ -73,6 +73,7 @@ pub struct SearchQuery {
     pub salary_min: Option<rust_decimal::Decimal>,
     pub salary_max: Option<rust_decimal::Decimal>,
     pub include_remote: bool,
+    pub is_urgent: Option<bool>,
     
     pub city: Option<String>,
     pub point: Option<GeoPoint>,
