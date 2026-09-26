@@ -35,8 +35,8 @@ pub struct OpportunitySearchResult {
     pub distance_meters: Option<f64>,
     pub match_score: Option<u8>,
     pub match_reasons: Vec<String>,
-    pub is_urgent: bool,       // استخدام فوری
-    pub is_featured: bool,     // سنجاق طلایی نقشه
+    pub is_urgent: bool,
+    pub is_featured: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -56,6 +56,12 @@ pub struct SearchPageResult {
     pub spatial_context: SpatialContext,
 }
 
+// =============================================================================
+// DEPRECATED: MapPinSummary (legacy endpoint /map-pins)
+// =============================================================================
+// این تایپ قدیمی است. از `MapMarker` به‌جای آن استفاده کنید.
+// در فاز ۳ (پس از مهاجرت کامل فرانت) حذف خواهد شد.
+#[deprecated(note = "Use MapMarker instead. Will be removed in phase 3.")]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub struct MapPinSummary {
     pub location_id: Uuid,
@@ -68,4 +74,54 @@ pub struct MapPinSummary {
     pub min_salary: Option<Decimal>,
     pub max_salary: Option<Decimal>,
     pub salary_currency: String,
+}
+
+// =============================================================================
+// MAP MARKERS — Server-Side Clustering
+// =============================================================================
+
+/// Marker تک‌مکانی: یک location با N آگهی
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct SinglePin {
+    #[schema(value_type = String, format = Uuid)]
+    pub location_id: Uuid,
+    #[schema(value_type = [f64; 2], example = json!([51.3890, 35.7200]))]
+    pub coordinates: [f64; 2],
+    pub address_summary: Option<String>,
+    pub opportunity_count: i64,
+    pub urgent_count: i64,
+    pub top_categories: Vec<String>,
+    pub sample_companies: Vec<String>,
+    pub min_salary: Option<Decimal>,
+    pub max_salary: Option<Decimal>,
+    pub salary_currency: String,
+}
+
+/// Marker خوشه‌ای: چند location که در یک grid cell گروه‌بندی شده‌اند
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct ClusterPin {
+    pub cluster_id: String,
+    #[schema(value_type = [f64; 2], example = json!([51.3890, 35.7200]))]
+    pub centroid: [f64; 2],
+    #[schema(value_type = [f64; 4], example = json!([51.30, 35.65, 51.45, 35.80]))]
+    pub bounds: [f64; 4], // [west, south, east, north]
+    pub expansion_zoom: u8,
+    pub opportunity_count: i64,
+    pub location_count: i64,
+    pub urgent_count: i64,
+    pub dominant_category: String,
+    pub top_categories: Vec<String>,
+    pub sample_companies: Vec<String>,
+    pub min_salary: Option<Decimal>,
+    pub max_salary: Option<Decimal>,
+    pub salary_currency: String,
+    pub label: String,
+}
+
+/// Discriminated union — فرانت با `kind` تصمیم می‌گیرد
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum MapMarker {
+    Single(SinglePin),
+    Cluster(ClusterPin),
 }

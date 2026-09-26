@@ -27,7 +27,10 @@ use biz_application::opportunity::CreateOpportunityCommand;
 use biz_application::saved::SaveSearchCommand;
 
 use biz_domain::application::{Application, ApplicationStatus};
-use biz_domain::discovery::{CompanySummary, MapPinSummary, OpportunitySearchResult, SearchPageResult, SpatialContext};
+use biz_domain::discovery::{
+    ClusterPin, CompanySummary, MapMarker, MapPinSummary, OpportunitySearchResult,
+    SearchPageResult, SinglePin, SpatialContext,
+};
 use biz_domain::governance::{Report, VerificationStatus};
 use biz_domain::opportunity::{Opportunity, OpportunityStatus, OpportunityType, RemoteScope, Salary, WorkplaceType};
 use biz_domain::taxonomy::{Category, CityTaxonomy, Country, ExperienceLevel, Industry, Occupation, Skill};
@@ -75,6 +78,7 @@ use biz_domain::taxonomy::{Category, CityTaxonomy, Country, ExperienceLevel, Ind
         crate::handlers::discovery::search_opportunities_handler,
         crate::handlers::discovery::get_recommended_opportunities_handler,
         crate::handlers::discovery::get_map_pins_handler,
+        crate::handlers::discovery::get_map_markers_handler,
         crate::handlers::discovery::get_opportunities_by_location_handler,
         crate::handlers::opportunity::get_opportunity_handler,
         crate::handlers::opportunity::track_opportunity_click_handler,
@@ -175,7 +179,11 @@ use biz_domain::taxonomy::{Category, CityTaxonomy, Country, ExperienceLevel, Ind
             OpportunitySearchResult,
             SearchPageResult,
             SpatialContext,
-            MapPinSummary
+            MapPinSummary,
+            // ✅ Map Markers جدید
+            MapMarker,
+            SinglePin,
+            ClusterPin
         )
     ),
     tags(

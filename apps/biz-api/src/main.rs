@@ -100,15 +100,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/companies/:id/members", get(handlers::company::list_members_handler).post(handlers::company::add_member_handler))
         .route("/companies/:id/opportunities", get(handlers::company::list_company_opportunities_handler).post(handlers::opportunity::create_opportunity_handler))
         .route("/companies/:id/public-opportunities", get(handlers::company::list_public_company_opportunities_handler))
-
-        // Discovery / Search, Recommended Feed & Map Bridge
-        .route("/opportunities/search", get(handlers::discovery::search_opportunities_handler))
+.route("/opportunities/search", get(handlers::discovery::search_opportunities_handler))
         .route("/opportunities/recommended", get(handlers::discovery::get_recommended_opportunities_handler))
         .route("/opportunities/map-pins", get(handlers::discovery::get_map_pins_handler))
+        .route("/opportunities/map-markers", get(handlers::discovery::get_map_markers_handler))
         .route("/opportunities/by-location/:location_id", get(handlers::discovery::get_opportunities_by_location_handler))
         .route("/opportunities/:id", get(handlers::opportunity::get_opportunity_handler))
         .route("/opportunities/:id/track-click", post(handlers::opportunity::track_opportunity_click_handler))
-
         // Opportunities Lifecycle & Paid Map Promotions
         .route("/opportunities/:id/publish", post(handlers::opportunity::publish_opportunity_handler))
         .route("/opportunities/:id/pause", post(handlers::opportunity::pause_opportunity_handler))

@@ -35,6 +35,7 @@ pub struct SearchOpportunitiesRequest {
 pub struct GetMapPinsRequest {
     pub q: Option<String>,
     pub bbox: Option<String>,
+    pub zoom: Option<u8>,
     pub city: Option<String>,
     pub lat: Option<f64>,
     pub lon: Option<f64>,

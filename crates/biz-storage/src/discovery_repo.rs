@@ -1,7 +1,8 @@
 use crate::candidate_repo::CandidateMatchContext;
 use crate::error::StorageError;
 use biz_domain::discovery::{
-    query::SearchCursor, CompanySummary, MapPinSummary, OpportunitySearchResult, SearchPageResult, SearchQuery, SortBy, SpatialContext,
+    query::SearchCursor, ClusterPin, CompanySummary, MapMarker, MapPinSummary,
+    OpportunitySearchResult, SearchPageResult, SearchQuery, SinglePin, SortBy, SpatialContext,
 };
 use chrono::{DateTime, Utc};
 use geo_types::{BoundingBox, GeoPoint, Radius};
@@ -115,6 +116,41 @@ struct MapPinDbRow {
     pub latitude: f64,
     pub address_summary: Option<String>,
     pub opportunity_count: i64,
+    pub top_categories: Vec<String>,
+    pub sample_companies: Vec<String>,
+    pub min_salary: Option<Decimal>,
+    pub max_salary: Option<Decimal>,
+    pub salary_currency: String,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct ClusterMarkerDbRow {
+    pub cluster_id: String,
+    pub centroid_lon: f64,
+    pub centroid_lat: f64,
+    pub west: f64,
+    pub south: f64,
+    pub east: f64,
+    pub north: f64,
+    pub opportunity_count: i64,
+    pub location_count: i64,
+    pub urgent_count: i64,
+    pub dominant_category: Option<String>,
+    pub top_categories: Vec<String>,
+    pub sample_companies: Vec<String>,
+    pub min_salary: Option<Decimal>,
+    pub max_salary: Option<Decimal>,
+    pub salary_currency: String,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct SinglePinDbRow {
+    pub location_id: Uuid,
+    pub longitude: f64,
+    pub latitude: f64,
+    pub address_summary: Option<String>,
+    pub opportunity_count: i64,
+    pub urgent_count: i64,
     pub top_categories: Vec<String>,
     pub sample_companies: Vec<String>,
     pub min_salary: Option<Decimal>,
@@ -328,39 +364,39 @@ impl DiscoveryRepository {
         let min_score_i16 = min_match_score.map(|s| s as i16);
 
         let rows = sqlx::query_as::<_, SearchDbRow>(&sql)
-            .bind(&q.text)               // $1
-            .bind(q.category_id)         // $2
-            .bind(q.occupation_id)       // $3
-            .bind(q.company_id)          // $4
-            .bind(&q.opportunity_type)   // $5
-            .bind(&q.workplace_type)     // $6
-            .bind(&q.experience_level)   // $7
-            .bind(q.salary_min)          // $8
-            .bind(effective_west)        // $9
-            .bind(effective_south)       // $10
-            .bind(effective_east)        // $11
-            .bind(effective_north)       // $12
-            .bind(lon)                   // $13
-            .bind(lat)                   // $14
-            .bind(effective_radius)      // $15
-            .bind(cursor_published_at)   // $16
-            .bind(cursor_id)             // $17
-            .bind(&q.skill_ids)          // $18
-            .bind(q.include_remote)      // $19
-            .bind((limit + 1) as i64)    // $20
-            .bind(effective_city)        // $21
-            .bind(should_score)          // $22
-            .bind(cand_skill_ids)        // $23
-            .bind(cand_min_salary)       // $24
-            .bind(cand_workplaces)       // $25
-            .bind(cand_city)             // $26
-            .bind(min_score_i16)         // $27
-            .bind(q.salary_max)          // $28
-            .bind(cand_category_ids)     // $29
-            .bind(cand_radius)           // $30
-            .bind(cand_lon)              // $31
-            .bind(cand_lat)              // $32
-            .bind(q.is_urgent)           // $33
+            .bind(&q.text)
+            .bind(q.category_id)
+            .bind(q.occupation_id)
+            .bind(q.company_id)
+            .bind(&q.opportunity_type)
+            .bind(&q.workplace_type)
+            .bind(&q.experience_level)
+            .bind(q.salary_min)
+            .bind(effective_west)
+            .bind(effective_south)
+            .bind(effective_east)
+            .bind(effective_north)
+            .bind(lon)
+            .bind(lat)
+            .bind(effective_radius)
+            .bind(cursor_published_at)
+            .bind(cursor_id)
+            .bind(&q.skill_ids)
+            .bind(q.include_remote)
+            .bind((limit + 1) as i64)
+            .bind(effective_city)
+            .bind(should_score)
+            .bind(cand_skill_ids)
+            .bind(cand_min_salary)
+            .bind(cand_workplaces)
+            .bind(cand_city)
+            .bind(min_score_i16)
+            .bind(q.salary_max)
+            .bind(cand_category_ids)
+            .bind(cand_radius)
+            .bind(cand_lon)
+            .bind(cand_lat)
+            .bind(q.is_urgent)
             .fetch_all(&self.pool)
             .await?;
 
@@ -449,6 +485,8 @@ impl DiscoveryRepository {
         })
     }
 
+    /// Legacy endpoint — نگه داشته شده برای backward compatibility
+    #[allow(deprecated)]
     pub async fn list_map_pins(
         &self,
         q_text: Option<&str>,
@@ -559,6 +597,328 @@ impl DiscoveryRepository {
                 min_salary: r.min_salary,
                 max_salary: r.max_salary,
                 salary_currency: r.salary_currency,
+            })
+            .collect())
+    }
+
+    // =========================================================================
+    // MAP MARKERS — Server-Side Clustering
+    // =========================================================================
+    pub async fn list_map_markers(
+        &self,
+        q_text: Option<&str>,
+        bbox: Option<&BoundingBox>,
+        point: Option<&GeoPoint>,
+        radius: Option<&Radius>,
+        city: Option<&str>,
+        category_id: Option<Uuid>,
+        skill_ids: &[Uuid],
+        opportunity_type: Option<&str>,
+        workplace_type: Option<&str>,
+        experience_level: Option<&str>,
+        salary_min: Option<Decimal>,
+        salary_max: Option<Decimal>,
+        is_urgent: Option<bool>,
+        zoom: u8,
+        limit: usize,
+    ) -> Result<Vec<MapMarker>, StorageError> {
+        let (lon, lat) = point
+            .map(|p| (Some(p.longitude()), Some(p.latitude())))
+            .unwrap_or((None, None));
+
+        let radius_m = radius.map(|r| Some(r.as_meters())).unwrap_or(None);
+        let is_radius_mode = radius_m.is_some() && lon.is_some() && lat.is_some();
+
+        let (west, south, east, north) = if !is_radius_mode {
+            bbox.map(|b| {
+                (
+                    Some(b.west()),
+                    Some(b.south()),
+                    Some(b.east()),
+                    Some(b.north()),
+                )
+            })
+            .unwrap_or((None, None, None, None))
+        } else {
+            (None, None, None, None)
+        };
+
+        let is_bbox_mode = !is_radius_mode && west.is_some();
+        let effective_city = if !is_radius_mode && !is_bbox_mode { city } else { None };
+
+        // ─── تصمیم‌گیری: Single vs Cluster ─────────────────────────────
+        if zoom >= 15 {
+            return self
+                .list_single_markers(
+                    q_text, west, south, east, north, radius_m, lon, lat,
+                    effective_city, category_id, skill_ids, opportunity_type,
+                    workplace_type, experience_level, salary_min, salary_max,
+                    is_urgent, limit,
+                )
+                .await;
+        }
+
+        // ─── Cluster mode ─────────────────────────────────────────────
+        let grid_size: f64 = match zoom {
+            0..=4 => 5.0,
+            5..=7 => 1.0,
+            8..=10 => 0.25,
+            11..=12 => 0.06,
+            13..=14 => 0.015,
+            _ => 0.005,
+        };
+
+        let expansion_zoom: i16 = match zoom {
+            0..=4 => 5,
+            5..=7 => 8,
+            8..=10 => 11,
+            11..=12 => 13,
+            13..=14 => 15,
+            _ => 16,
+        };
+
+        let sql = r#"
+            WITH filtered AS (
+                SELECT
+                    loc.id AS location_id,
+                    loc.coordinates::geometry AS geom,
+                    cat.name AS category_name,
+                    c.name AS company_name,
+                    o.id AS opp_id,
+                    o.is_urgent,
+                    o.salary_min,
+                    o.salary_max,
+                    o.salary_currency,
+                    ROUND(ST_X(loc.coordinates::geometry) / $10::float8)::bigint AS cell_x,
+                    ROUND(ST_Y(loc.coordinates::geometry) / $10::float8)::bigint AS cell_y
+                FROM locations loc
+                INNER JOIN opportunity_locations ol ON ol.location_id = loc.id
+                INNER JOIN opportunities o ON o.id = ol.opportunity_id
+                INNER JOIN companies c ON c.id = o.company_id
+                LEFT JOIN categories cat ON cat.id = o.category_id
+                WHERE o.status = 'published'
+                  AND (o.expires_at IS NULL OR o.expires_at > NOW())
+                  AND ($1::text IS NULL OR o.search_vector @@ plainto_tsquery('simple', $1))
+                  AND ($2::float8 IS NULL OR (loc.coordinates && ST_MakeEnvelope($2, $3, $4, $5, 4326)))
+                  AND ($6::float8 IS NULL OR ST_DWithin(loc.coordinates::geography, ST_SetSRID(ST_MakePoint($7, $8), 4326)::geography, $6))
+                  AND ($9::text IS NULL OR loc.address_summary ILIKE '%' || $9 || '%')
+                  AND ($11::uuid IS NULL OR o.category_id = $11)
+                  AND ($12::text IS NULL OR o.opportunity_type = $12)
+                  AND ($13::text IS NULL OR o.workplace_type = $13)
+                  AND ($14::text IS NULL OR o.experience_level = $14)
+                  AND ($15::numeric IS NULL OR COALESCE(o.salary_max, o.salary_min) >= $15)
+                  AND ($16::numeric IS NULL OR COALESCE(o.salary_min, o.salary_max) <= $16)
+                  AND (
+                      $17::uuid[] IS NULL OR CARDINALITY($17) = 0 OR
+                      EXISTS (
+                          SELECT 1 FROM opportunity_skills os
+                          WHERE os.opportunity_id = o.id AND os.skill_id = ANY($17)
+                      )
+                  )
+                  AND ($18::boolean IS NULL OR o.is_urgent = $18)
+            ),
+            aggregated AS (
+                SELECT
+                    cell_x,
+                    cell_y,
+                    'c_' || cell_x || '_' || cell_y || '_' || ($10::float8 * 1000)::bigint AS cluster_id,
+                    ST_X(ST_Centroid(ST_Collect(geom))) AS centroid_lon,
+                    ST_Y(ST_Centroid(ST_Collect(geom))) AS centroid_lat,
+                    ST_XMin(ST_Extent(geom)) AS west,
+                    ST_YMin(ST_Extent(geom)) AS south,
+                    ST_XMax(ST_Extent(geom)) AS east,
+                    ST_YMax(ST_Extent(geom)) AS north,
+                    COUNT(DISTINCT opp_id)::int8 AS opportunity_count,
+                    COUNT(DISTINCT location_id)::int8 AS location_count,
+                    COUNT(DISTINCT opp_id) FILTER (WHERE is_urgent = true)::int8 AS urgent_count,
+                    MODE() WITHIN GROUP (ORDER BY category_name) AS dominant_category,
+                    COALESCE((ARRAY_AGG(DISTINCT category_name) FILTER (WHERE category_name IS NOT NULL))[1:3], ARRAY[]::text[]) AS top_categories,
+                    COALESCE((ARRAY_AGG(DISTINCT company_name) FILTER (WHERE company_name IS NOT NULL))[1:3], ARRAY[]::text[]) AS sample_companies,
+                    MIN(salary_min) AS min_salary,
+                    MAX(salary_max) AS max_salary,
+                    COALESCE(MAX(salary_currency), 'IRR') AS salary_currency
+                FROM filtered
+                GROUP BY cell_x, cell_y
+            )
+            SELECT * FROM aggregated
+            WHERE opportunity_count > 0
+            ORDER BY opportunity_count DESC
+            LIMIT $19
+        "#;
+
+        let rows = sqlx::query_as::<_, ClusterMarkerDbRow>(sql)
+            .bind(q_text)
+            .bind(west)
+            .bind(south)
+            .bind(east)
+            .bind(north)
+            .bind(if is_radius_mode { radius_m } else { None })
+            .bind(lon)
+            .bind(lat)
+            .bind(effective_city)
+            .bind(grid_size)
+            .bind(category_id)
+            .bind(opportunity_type)
+            .bind(workplace_type)
+            .bind(experience_level)
+            .bind(salary_min)
+            .bind(salary_max)
+            .bind(skill_ids)
+            .bind(is_urgent)
+            .bind(limit as i64)
+            .fetch_all(&self.pool)
+            .await?;
+
+        let markers: Vec<MapMarker> = rows
+            .into_iter()
+            .map(|r| {
+                // اگر در cell فقط یک location باشد، آن را به Single تبدیل می‌کنیم
+                if r.location_count == 1 && r.opportunity_count >= 1 {
+                    MapMarker::Single(SinglePin {
+                        location_id: Uuid::nil(),
+                        coordinates: [r.centroid_lon, r.centroid_lat],
+                        address_summary: None,
+                        opportunity_count: r.opportunity_count,
+                        urgent_count: r.urgent_count,
+                        top_categories: r.top_categories,
+                        sample_companies: r.sample_companies,
+                        min_salary: r.min_salary,
+                        max_salary: r.max_salary,
+                        salary_currency: r.salary_currency,
+                    })
+                } else {
+                    let dominant = r.dominant_category.clone().unwrap_or_default();
+                    let label = if dominant.is_empty() {
+                        format!("{} شغل", r.opportunity_count)
+                    } else {
+                        format!("{} • {} شغل", dominant, r.opportunity_count)
+                    };
+
+                    MapMarker::Cluster(ClusterPin {
+                        cluster_id: r.cluster_id,
+                        centroid: [r.centroid_lon, r.centroid_lat],
+                        bounds: [r.west, r.south, r.east, r.north],
+                        expansion_zoom: expansion_zoom as u8,
+                        opportunity_count: r.opportunity_count,
+                        location_count: r.location_count,
+                        urgent_count: r.urgent_count,
+                        dominant_category: dominant,
+                        top_categories: r.top_categories,
+                        sample_companies: r.sample_companies,
+                        min_salary: r.min_salary,
+                        max_salary: r.max_salary,
+                        salary_currency: r.salary_currency,
+                        label,
+                    })
+                }
+            })
+            .collect();
+
+        Ok(markers)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn list_single_markers(
+        &self,
+        q_text: Option<&str>,
+        west: Option<f64>,
+        south: Option<f64>,
+        east: Option<f64>,
+        north: Option<f64>,
+        radius_m: Option<f64>,
+        lon: Option<f64>,
+        lat: Option<f64>,
+        city: Option<&str>,
+        category_id: Option<Uuid>,
+        skill_ids: &[Uuid],
+        opportunity_type: Option<&str>,
+        workplace_type: Option<&str>,
+        experience_level: Option<&str>,
+        salary_min: Option<Decimal>,
+        salary_max: Option<Decimal>,
+        is_urgent: Option<bool>,
+        limit: usize,
+    ) -> Result<Vec<MapMarker>, StorageError> {
+        let sql = r#"
+            SELECT
+                loc.id AS location_id,
+                ST_X(loc.coordinates::geometry) AS longitude,
+                ST_Y(loc.coordinates::geometry) AS latitude,
+                loc.address_summary,
+                COUNT(DISTINCT o.id)::int8 AS opportunity_count,
+                COUNT(DISTINCT o.id) FILTER (WHERE o.is_urgent = true)::int8 AS urgent_count,
+                COALESCE((ARRAY_AGG(DISTINCT cat.name) FILTER (WHERE cat.name IS NOT NULL))[1:3], ARRAY[]::text[]) AS top_categories,
+                COALESCE((ARRAY_AGG(DISTINCT c.name) FILTER (WHERE c.name IS NOT NULL))[1:3], ARRAY[]::text[]) AS sample_companies,
+                MIN(o.salary_min) AS min_salary,
+                MAX(o.salary_max) AS max_salary,
+                COALESCE(MAX(o.salary_currency), 'IRR') AS salary_currency
+            FROM locations loc
+            INNER JOIN opportunity_locations ol ON ol.location_id = loc.id
+            INNER JOIN opportunities o ON o.id = ol.opportunity_id
+            INNER JOIN companies c ON c.id = o.company_id
+            LEFT JOIN categories cat ON cat.id = o.category_id
+            WHERE o.status = 'published'
+              AND (o.expires_at IS NULL OR o.expires_at > NOW())
+              AND ($1::text IS NULL OR o.search_vector @@ plainto_tsquery('simple', $1))
+              AND ($2::float8 IS NULL OR (loc.coordinates && ST_MakeEnvelope($2, $3, $4, $5, 4326)))
+              AND ($6::float8 IS NULL OR ST_DWithin(loc.coordinates::geography, ST_SetSRID(ST_MakePoint($7, $8), 4326)::geography, $6))
+              AND ($9::text IS NULL OR loc.address_summary ILIKE '%' || $9 || '%')
+              AND ($10::uuid IS NULL OR o.category_id = $10)
+              AND ($11::text IS NULL OR o.opportunity_type = $11)
+              AND ($12::text IS NULL OR o.workplace_type = $12)
+              AND ($13::text IS NULL OR o.experience_level = $13)
+              AND ($14::numeric IS NULL OR COALESCE(o.salary_max, o.salary_min) >= $14)
+              AND ($15::numeric IS NULL OR COALESCE(o.salary_min, o.salary_max) <= $15)
+              AND (
+                  $16::uuid[] IS NULL OR CARDINALITY($16) = 0 OR
+                  EXISTS (
+                      SELECT 1 FROM opportunity_skills os
+                      WHERE os.opportunity_id = o.id AND os.skill_id = ANY($16)
+                  )
+              )
+              AND ($18::boolean IS NULL OR o.is_urgent = $18)
+            GROUP BY loc.id, loc.coordinates, loc.address_summary
+            ORDER BY opportunity_count DESC
+            LIMIT $17
+        "#;
+
+        let rows = sqlx::query_as::<_, SinglePinDbRow>(sql)
+            .bind(q_text)
+            .bind(west)
+            .bind(south)
+            .bind(east)
+            .bind(north)
+            .bind(radius_m)
+            .bind(lon)
+            .bind(lat)
+            .bind(city)
+            .bind(category_id)
+            .bind(opportunity_type)
+            .bind(workplace_type)
+            .bind(experience_level)
+            .bind(salary_min)
+            .bind(salary_max)
+            .bind(skill_ids)
+            .bind(limit as i64)
+            .bind(is_urgent)
+            .fetch_all(&self.pool)
+            .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| {
+                MapMarker::Single(SinglePin {
+                    location_id: r.location_id,
+                    coordinates: [r.longitude, r.latitude],
+                    address_summary: r.address_summary,
+                    opportunity_count: r.opportunity_count,
+                    urgent_count: r.urgent_count,
+                    top_categories: r.top_categories,
+                    sample_companies: r.sample_companies,
+                    min_salary: r.min_salary,
+                    max_salary: r.max_salary,
+                    salary_currency: r.salary_currency,
+                })
             })
             .collect())
     }

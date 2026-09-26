@@ -1,0 +1,1838 @@
+﻿====================================
+DISCOVERY FULL MIGRATION DUMP
+Generated: 2026-09-26 09:42:42
+Total files requested: 19
+====================================
+
+====================================
+FILE EXISTENCE CHECK
+====================================
+OK   | crates\biz-domain\src\discovery\read_model.rs | 2405 bytes
+OK   | crates\biz-domain\src\discovery\query.rs | 2327 bytes
+OK   | crates\biz-domain\src\discovery\mod.rs | 203 bytes
+OK   | crates\biz-application\src\discovery\dto.rs | 1658 bytes
+OK   | crates\biz-application\src\discovery\use_cases.rs | 7827 bytes
+OK   | crates\biz-application\src\discovery\mod.rs | 136 bytes
+OK   | crates\biz-storage\src\discovery_repo.rs | 28738 bytes
+OK   | crates\biz-storage\src\lib.rs | 924 bytes
+OK   | apps\biz-api\src\handlers\discovery.rs | 2540 bytes
+OK   | apps\biz-api\src\handlers\mod.rs | 189 bytes
+OK   | apps\biz-api\src\openapi.rs | 8960 bytes
+OK   | apps\biz-api\src\main.rs | 11018 bytes
+OK   | crates\geo-query\src\clustering.rs | 1925 bytes
+OK   | crates\geo-query\src\bbox_query.rs | 1832 bytes
+OK   | crates\geo-query\src\models.rs | 583 bytes
+OK   | crates\geo-query\src\lib.rs | 371 bytes
+OK   | crates\geo-presentation\src\cluster.rs | 1022 bytes
+OK   | crates\geo-presentation\src\lib.rs | 224 bytes
+OK   | migrations\20240101000026_optimize_search_and_spatial_indexes.sql | 1243 bytes
+
+SUMMARY: Found=19 Missing=0
+
+====================================
+FILES CONTENT
+====================================
+
+--------------------------------------------------
+FILE: crates\biz-domain\src\discovery\read_model.rs
+--------------------------------------------------
+use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+use uuid::Uuid;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct CompanySummary {
+    pub id: Uuid,
+    pub name: String,
+    pub slug: String,
+    pub logo_storage_key: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct OpportunitySearchResult {
+    pub id: Uuid,
+    pub title: String,
+    pub description_summary: String,
+    pub opportunity_type: String,
+    pub workplace_type: String,
+    pub remote_scope: Option<String>,
+    pub experience_level: String,
+    pub salary_min: Option<Decimal>,
+    pub salary_max: Option<Decimal>,
+    pub salary_currency: String,
+    pub salary_period: String,
+    pub published_at: Option<DateTime<Utc>>,
+    pub company: CompanySummary,
+    pub location_summary: Option<String>,
+    #[schema(value_type = Option<String>, format = Uuid)]
+    pub location_id: Option<Uuid>,
+    #[schema(value_type = Option<[f64; 2]>, example = json!([51.3890, 35.6892]))]
+    pub coordinates: Option<[f64; 2]>,
+    pub distance_meters: Option<f64>,
+    pub match_score: Option<u8>,
+    pub match_reasons: Vec<String>,
+    pub is_urgent: bool,       // استخدام فوری
+    pub is_featured: bool,     // سنجاق طلایی نقشه
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct SpatialContext {
+    pub scope: String,
+    pub detected_city: Option<String>,
+    pub city_total_jobs: Option<i64>,
+    pub national_total_jobs: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct SearchPageResult {
+    pub items: Vec<OpportunitySearchResult>,
+    pub total_count: i64,
+    pub next_cursor: Option<String>,
+    pub has_more: bool,
+    pub spatial_context: SpatialContext,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct MapPinSummary {
+    pub location_id: Uuid,
+    #[schema(value_type = [f64; 2], example = json!([51.3890, 35.7200]))]
+    pub coordinates: [f64; 2],
+    pub address_summary: Option<String>,
+    pub opportunity_count: i64,
+    pub top_categories: Vec<String>,
+    pub sample_companies: Vec<String>,
+    pub min_salary: Option<Decimal>,
+    pub max_salary: Option<Decimal>,
+    pub salary_currency: String,
+}
+
+--------------------------------------------------
+FILE: crates\biz-domain\src\discovery\query.rs
+--------------------------------------------------
+use chrono::{DateTime, Utc};
+use geo_types::{BoundingBox, GeoPoint, Radius};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SortBy {
+    Newest,
+    Distance,
+    SalaryDesc,
+    MatchScore,
+}
+
+impl Default for SortBy {
+    fn default() -> Self {
+        Self::Newest
+    }
+}
+
+impl SortBy {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Newest => "newest",
+            Self::Distance => "distance",
+            Self::SalaryDesc => "salary_desc",
+            Self::MatchScore => "match_score",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "distance" => Self::Distance,
+            "salary_desc" => Self::SalaryDesc,
+            "match_score" => Self::MatchScore,
+            _ => Self::Newest,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct SearchCursor {
+    pub published_at: DateTime<Utc>,
+    pub id: Uuid,
+}
+
+impl SearchCursor {
+    pub fn encode(&self) -> String {
+        format!("{}:{}", self.published_at.to_rfc3339(), self.id)
+    }
+
+    pub fn decode(s: &str) -> Option<Self> {
+        let parts: Vec<&str> = s.split(':').collect();
+        if parts.len() < 2 {
+            return None;
+        }
+        let published_at = DateTime::parse_from_rfc3339(parts[0]).ok()?.with_timezone(&Utc);
+        let id = Uuid::parse_str(parts[1]).ok()?;
+        Some(Self { published_at, id })
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SearchQuery {
+    pub text: Option<String>,
+    pub category_id: Option<Uuid>,
+    pub occupation_id: Option<Uuid>,
+    pub company_id: Option<Uuid>,
+    pub skill_ids: Vec<Uuid>,
+    pub opportunity_type: Option<String>,
+    pub workplace_type: Option<String>,
+    pub experience_level: Option<String>,
+    pub salary_min: Option<rust_decimal::Decimal>,
+    pub salary_max: Option<rust_decimal::Decimal>,
+    pub include_remote: bool,
+    pub is_urgent: Option<bool>,
+    
+    pub city: Option<String>,
+    pub point: Option<GeoPoint>,
+    pub radius: Option<Radius>,
+    pub bbox: Option<BoundingBox>,
+
+    pub sort: SortBy,
+    pub cursor: Option<SearchCursor>,
+    pub limit: usize,
+}
+
+--------------------------------------------------
+FILE: crates\biz-domain\src\discovery\mod.rs
+--------------------------------------------------
+pub mod query;
+pub mod read_model;
+
+pub use query::{SearchCursor, SearchQuery, SortBy};
+pub use read_model::{CompanySummary, MapPinSummary, OpportunitySearchResult, SearchPageResult, SpatialContext};
+
+--------------------------------------------------
+FILE: crates\biz-application\src\discovery\dto.rs
+--------------------------------------------------
+use rust_decimal::Decimal;
+use serde::Deserialize;
+use utoipa::IntoParams;
+use uuid::Uuid;
+
+#[derive(Debug, Clone, Deserialize, Default, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct SearchOpportunitiesRequest {
+    pub q: Option<String>,
+    pub category_id: Option<Uuid>,
+    pub occupation_id: Option<Uuid>,
+    pub company_id: Option<Uuid>,
+    pub skill_ids: Option<String>,
+    pub opportunity_type: Option<String>,
+    pub workplace_type: Option<String>,
+    pub experience_level: Option<String>,
+    pub salary_min: Option<Decimal>,
+    pub salary_max: Option<Decimal>,
+    pub include_remote: Option<bool>,
+    pub is_urgent: Option<bool>,
+    pub near_me: Option<bool>,
+    pub city: Option<String>,
+    pub lat: Option<f64>,
+    pub lon: Option<f64>,
+    pub radius_meters: Option<f64>,
+    pub bbox: Option<String>,
+    pub sort: Option<String>,
+    pub min_match_score: Option<u8>,
+    pub cursor: Option<String>,
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct GetMapPinsRequest {
+    pub q: Option<String>,
+    pub bbox: Option<String>,
+    pub city: Option<String>,
+    pub lat: Option<f64>,
+    pub lon: Option<f64>,
+    pub radius_meters: Option<f64>,
+    pub category_id: Option<Uuid>,
+    pub skill_ids: Option<String>,
+    pub opportunity_type: Option<String>,
+    pub workplace_type: Option<String>,
+    pub experience_level: Option<String>,
+    pub salary_min: Option<Decimal>,
+    pub salary_max: Option<Decimal>,
+    pub is_urgent: Option<bool>,
+    pub limit: Option<usize>,
+}
+
+--------------------------------------------------
+FILE: crates\biz-application\src\discovery\use_cases.rs
+--------------------------------------------------
+use super::dto::{GetMapPinsRequest, SearchOpportunitiesRequest};
+use crate::error::ApplicationError;
+use biz_domain::discovery::{
+    query::SearchCursor, MapPinSummary, OpportunitySearchResult, SearchPageResult, SearchQuery, SortBy,
+};
+use biz_storage::{CandidateRepository, DiscoveryRepository};
+use geo_types::{BoundingBox, GeoPoint, Radius};
+use uuid::Uuid;
+
+#[derive(Clone)]
+pub struct DiscoveryUseCases {
+    discovery_repo: DiscoveryRepository,
+    candidate_repo: CandidateRepository,
+}
+
+impl DiscoveryUseCases {
+    pub fn new(discovery_repo: DiscoveryRepository, candidate_repo: CandidateRepository) -> Self {
+        Self {
+            discovery_repo,
+            candidate_repo,
+        }
+    }
+
+    pub async fn search(
+        &self,
+        actor_user_id: Option<Uuid>,
+        req: SearchOpportunitiesRequest,
+    ) -> Result<SearchPageResult, ApplicationError> {
+        let is_near_me = req.near_me.unwrap_or(false);
+
+        let cand_ctx = match actor_user_id {
+            Some(uid) => self.candidate_repo.get_match_context(uid).await?,
+            None => None,
+        };
+
+        let mut point = match (req.lon, req.lat) {
+            (Some(lon), Some(lat)) => Some(GeoPoint::new(lon, lat).map_err(|e| ApplicationError::Validation(e.to_string()))?),
+            _ => None,
+        };
+
+        let mut effective_sort = req.sort.as_deref().map(SortBy::from_str).unwrap_or(SortBy::Newest);
+
+        if is_near_me {
+            let user_id = actor_user_id.ok_or_else(|| {
+                ApplicationError::Unauthorized("You must be logged in to search near your profile location".into())
+            })?;
+
+            let coords = self.candidate_repo.get_preferred_coordinates(user_id).await?;
+            if let Some((cand_lon, cand_lat)) = coords {
+                point = Some(GeoPoint::new(cand_lon, cand_lat).map_err(|e| ApplicationError::Validation(e.to_string()))?);
+                effective_sort = SortBy::Distance;
+            } else {
+                return Err(ApplicationError::Validation(
+                    "No preferred location set in your profile. Please set your city in your profile first.".into(),
+                ));
+            }
+        }
+
+        let radius = match req.radius_meters {
+            Some(r) => Some(Radius::from_meters(r).map_err(|e| ApplicationError::Validation(e.to_string()))?),
+            None => None,
+        };
+
+        let bbox = match req.bbox {
+            Some(ref b) => {
+                let parts: Vec<&str> = b.split(',').collect();
+                if parts.len() == 4 {
+                    let w: f64 = parts[0].trim().parse().map_err(|_| ApplicationError::Validation("Invalid bbox west".into()))?;
+                    let s: f64 = parts[1].trim().parse().map_err(|_| ApplicationError::Validation("Invalid bbox south".into()))?;
+                    let e: f64 = parts[2].trim().parse().map_err(|_| ApplicationError::Validation("Invalid bbox east".into()))?;
+                    let n: f64 = parts[3].trim().parse().map_err(|_| ApplicationError::Validation("Invalid bbox north".into()))?;
+                    Some(BoundingBox::new(w, s, e, n).map_err(|e| ApplicationError::Validation(e.to_string()))?)
+                } else {
+                    None
+                }
+            }
+            None => None,
+        };
+
+        let skill_ids: Vec<Uuid> = req.skill_ids
+            .map(|raw| {
+                raw.split(',')
+                    .filter_map(|s| Uuid::parse_str(s.trim()).ok())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let cursor = req.cursor.as_deref().and_then(SearchCursor::decode);
+
+        let query = SearchQuery {
+            text: req.q,
+            category_id: req.category_id,
+            occupation_id: req.occupation_id,
+            company_id: req.company_id,
+            skill_ids,
+            opportunity_type: req.opportunity_type,
+            workplace_type: req.workplace_type,
+            experience_level: req.experience_level,
+            salary_min: req.salary_min,
+            salary_max: req.salary_max,
+            include_remote: req.include_remote.unwrap_or(false),
+            is_urgent: req.is_urgent,
+            city: req.city,
+            point,
+            radius,
+            bbox,
+            sort: effective_sort,
+            cursor,
+            limit: req.limit.unwrap_or(20),
+        };
+
+        let result = self.discovery_repo.search(&query, cand_ctx.as_ref(), req.min_match_score).await?;
+        Ok(result)
+    }
+
+    pub async fn get_recommended_opportunities(
+        &self,
+        user_id: Uuid,
+        limit: usize,
+    ) -> Result<SearchPageResult, ApplicationError> {
+        let cand_ctx = self.candidate_repo.get_match_context(user_id).await?
+            .ok_or_else(|| ApplicationError::Validation("Candidate profile does not exist".into()))?;
+
+        let query = SearchQuery {
+            sort: SortBy::MatchScore,
+            include_remote: true,
+            limit: limit.clamp(1, 50),
+            ..Default::default()
+        };
+
+        let result = self.discovery_repo.search(&query, Some(&cand_ctx), Some(50)).await?;
+        Ok(result)
+    }
+
+    pub async fn get_map_pins(&self, req: GetMapPinsRequest) -> Result<Vec<MapPinSummary>, ApplicationError> {
+        let bbox = match req.bbox {
+            Some(ref b) => {
+                let parts: Vec<&str> = b.split(',').collect();
+                if parts.len() == 4 {
+                    let w: f64 = parts[0].trim().parse().map_err(|_| ApplicationError::Validation("Invalid bbox west".into()))?;
+                    let s: f64 = parts[1].trim().parse().map_err(|_| ApplicationError::Validation("Invalid bbox south".into()))?;
+                    let e: f64 = parts[2].trim().parse().map_err(|_| ApplicationError::Validation("Invalid bbox east".into()))?;
+                    let n: f64 = parts[3].trim().parse().map_err(|_| ApplicationError::Validation("Invalid bbox north".into()))?;
+                    Some(BoundingBox::new(w, s, e, n).map_err(|e| ApplicationError::Validation(e.to_string()))?)
+                } else {
+                    None
+                }
+            }
+            None => None,
+        };
+
+        let point = match (req.lon, req.lat) {
+            (Some(lon), Some(lat)) => Some(GeoPoint::new(lon, lat).map_err(|e| ApplicationError::Validation(e.to_string()))?),
+            _ => None,
+        };
+
+        let radius = match req.radius_meters {
+            Some(r) => Some(Radius::from_meters(r).map_err(|e| ApplicationError::Validation(e.to_string()))?),
+            None => None,
+        };
+
+        let skill_ids: Vec<Uuid> = req.skill_ids
+            .map(|raw| {
+                raw.split(',')
+                    .filter_map(|s| Uuid::parse_str(s.trim()).ok())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let limit = req.limit.unwrap_or(150);
+        let pins = self.discovery_repo.list_map_pins(
+            req.q.as_deref(),
+            bbox.as_ref(),
+            point.as_ref(),
+            radius.as_ref(),
+            req.city.as_deref(),
+            req.category_id,
+            &skill_ids,
+            req.opportunity_type.as_deref(),
+            req.workplace_type.as_deref(),
+            req.experience_level.as_deref(),
+            req.salary_min,
+            req.salary_max,
+            req.is_urgent,
+            limit,
+        ).await?;
+
+        Ok(pins)
+    }
+
+    pub async fn get_by_location(&self, location_id: Uuid) -> Result<Vec<OpportunitySearchResult>, ApplicationError> {
+        let items = self.discovery_repo.list_by_location(location_id).await?;
+        Ok(items)
+    }
+}
+
+--------------------------------------------------
+FILE: crates\biz-application\src\discovery\mod.rs
+--------------------------------------------------
+pub mod dto;
+pub mod use_cases;
+
+pub use dto::{GetMapPinsRequest, SearchOpportunitiesRequest};
+pub use use_cases::DiscoveryUseCases;
+
+--------------------------------------------------
+FILE: crates\biz-storage\src\discovery_repo.rs
+--------------------------------------------------
+use crate::candidate_repo::CandidateMatchContext;
+use crate::error::StorageError;
+use biz_domain::discovery::{
+    query::SearchCursor, CompanySummary, MapPinSummary, OpportunitySearchResult, SearchPageResult, SearchQuery, SortBy, SpatialContext,
+};
+use chrono::{DateTime, Utc};
+use geo_types::{BoundingBox, GeoPoint, Radius};
+use rust_decimal::Decimal;
+use sqlx::PgPool;
+use uuid::Uuid;
+
+#[derive(Debug, sqlx::FromRow)]
+struct SearchDbRow {
+    pub id: Uuid,
+    pub title: String,
+    pub description: String,
+    pub opportunity_type: String,
+    pub workplace_type: String,
+    pub remote_scope: Option<String>,
+    pub experience_level: String,
+    pub salary_min: Option<Decimal>,
+    pub salary_max: Option<Decimal>,
+    pub salary_currency: String,
+    pub salary_period: String,
+    pub published_at: Option<DateTime<Utc>>,
+    pub is_urgent: Option<bool>,
+    pub is_featured: Option<bool>,
+    pub company_id: Uuid,
+    pub company_name: String,
+    pub company_slug: String,
+    pub company_logo: Option<String>,
+    pub location_id: Option<Uuid>,
+    pub location_summary: Option<String>,
+    pub longitude: Option<f64>,
+    pub latitude: Option<f64>,
+    pub distance_meters: Option<f64>,
+    pub total_matching: Option<i64>,
+    pub match_score: Option<i16>,
+    pub matched_skills_count: Option<i64>,
+    pub category_matches: Option<bool>,
+    pub salary_matches: Option<bool>,
+    pub workplace_matches: Option<bool>,
+    pub location_matches: Option<bool>,
+}
+
+impl SearchDbRow {
+    fn to_domain(self) -> OpportunitySearchResult {
+        let coordinates = match (self.longitude, self.latitude) {
+            (Some(lon), Some(lat)) => Some([lon, lat]),
+            _ => None,
+        };
+
+        let mut match_reasons = Vec::new();
+        if let Some(score) = self.match_score {
+            if score >= 20 {
+                if let Some(cnt) = self.matched_skills_count {
+                    if cnt > 0 {
+                        match_reasons.push(format!("تطابق {} مهارت تخصصی با رزومه شما", cnt));
+                    }
+                }
+                if self.category_matches == Some(true) {
+                    match_reasons.push("دسته‌بندی شغلی مورد علاقه شما".to_string());
+                }
+                if self.location_matches == Some(true) {
+                    if self.workplace_type == "remote" {
+                        match_reasons.push("امکان دورکاری از هر نقطه".to_string());
+                    } else {
+                        match_reasons.push("واقع در شهر سکونت یا شعاع تردد شما".to_string());
+                    }
+                }
+                if self.workplace_matches == Some(true) {
+                    match_reasons.push("شیوه کار منطبق با انتخاب شما".to_string());
+                }
+                if self.salary_matches == Some(true) {
+                    match_reasons.push("حقوق پیشنهادی متناسب با انتظار مالی شما".to_string());
+                }
+            }
+        }
+
+        OpportunitySearchResult {
+            id: self.id,
+            title: self.title,
+            description_summary: self.description,
+            opportunity_type: self.opportunity_type,
+            workplace_type: self.workplace_type,
+            remote_scope: self.remote_scope,
+            experience_level: self.experience_level,
+            salary_min: self.salary_min,
+            salary_max: self.salary_max,
+            salary_currency: self.salary_currency,
+            salary_period: self.salary_period,
+            published_at: self.published_at,
+            is_urgent: self.is_urgent.unwrap_or(false),
+            is_featured: self.is_featured.unwrap_or(false),
+            company: CompanySummary {
+                id: self.company_id,
+                name: self.company_name,
+                slug: self.company_slug,
+                logo_storage_key: self.company_logo,
+            },
+            location_id: self.location_id,
+            location_summary: self.location_summary,
+            coordinates,
+            distance_meters: self.distance_meters,
+            match_score: self.match_score.map(|s| s.clamp(0, 100) as u8),
+            match_reasons,
+        }
+    }
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct MapPinDbRow {
+    pub location_id: Uuid,
+    pub longitude: f64,
+    pub latitude: f64,
+    pub address_summary: Option<String>,
+    pub opportunity_count: i64,
+    pub top_categories: Vec<String>,
+    pub sample_companies: Vec<String>,
+    pub min_salary: Option<Decimal>,
+    pub max_salary: Option<Decimal>,
+    pub salary_currency: String,
+}
+
+#[derive(Clone)]
+pub struct DiscoveryRepository {
+    pool: PgPool,
+}
+
+impl DiscoveryRepository {
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+
+    pub async fn search(
+        &self,
+        q: &SearchQuery,
+        cand_ctx: Option<&CandidateMatchContext>,
+        min_match_score: Option<u8>,
+    ) -> Result<SearchPageResult, StorageError> {
+        let limit = q.limit.clamp(1, 50);
+
+        let (lon, lat) = q.point.map(|p| (Some(p.longitude()), Some(p.latitude()))).unwrap_or((None, None));
+        let radius_m = q.radius.map(|r| Some(r.as_meters())).unwrap_or(None);
+        let (west, south, east, north) = q.bbox
+            .map(|b| (Some(b.west()), Some(b.south()), Some(b.east()), Some(b.north())))
+            .unwrap_or((None, None, None, None));
+
+        let (cursor_published_at, cursor_id) = q.cursor
+            .map(|c| (Some(c.published_at), Some(c.id)))
+            .unwrap_or((None, None));
+
+        let is_radius_mode = radius_m.is_some() && lon.is_some() && lat.is_some();
+        let is_bbox_mode = !is_radius_mode && west.is_some() && south.is_some() && east.is_some() && north.is_some();
+        let is_city_mode = !is_radius_mode && !is_bbox_mode && q.city.is_some();
+
+        let cand_skill_ids = cand_ctx.map(|c| c.skill_ids.as_slice()).unwrap_or(&[]);
+        let cand_category_ids = cand_ctx.map(|c| c.preferred_category_ids.as_slice()).unwrap_or(&[]);
+        let cand_city = cand_ctx.and_then(|c| c.preferred_city.as_deref());
+        let cand_workplaces = cand_ctx.map(|c| c.preferred_workplace_types.as_slice()).unwrap_or(&[]);
+        let cand_min_salary = cand_ctx.and_then(|c| c.expected_salary_min);
+        let (cand_lon, cand_lat) = cand_ctx.and_then(|c| c.commute_coords).map(|(x, y)| (Some(x), Some(y))).unwrap_or((None, None));
+        let cand_radius = cand_ctx.map(|c| c.commute_radius_meters as f64).unwrap_or(5000.0);
+        let has_cand = cand_ctx.is_some();
+
+        let should_score = has_cand && (q.sort == SortBy::MatchScore || min_match_score.is_some());
+
+        let order_clause = match q.sort {
+            SortBy::MatchScore if has_cand => {
+                "d.match_score DESC NULLS LAST, d.published_at DESC, d.id DESC"
+            }
+            SortBy::Distance if lon.is_some() && lat.is_some() => {
+                "d.distance_meters ASC NULLS LAST, d.published_at DESC, d.id DESC"
+            }
+            SortBy::SalaryDesc => {
+                "COALESCE(d.salary_max, d.salary_min, 0) DESC, d.published_at DESC, d.id DESC"
+            }
+            _ => "d.published_at DESC, d.id DESC",
+        };
+
+        let sql = format!(
+            r#"
+            WITH filtered_opportunities AS (
+                SELECT DISTINCT ON (o.id)
+                    o.id,
+                    o.title,
+                    SUBSTRING(o.description FROM 1 FOR 180) AS description,
+                    o.opportunity_type,
+                    o.workplace_type,
+                    o.remote_scope,
+                    o.experience_level,
+                    o.salary_min,
+                    o.salary_max,
+                    o.salary_currency,
+                    o.salary_period,
+                    o.published_at,
+                    o.is_urgent,
+                    o.is_featured,
+                    c.id AS company_id,
+                    c.name AS company_name,
+                    c.slug AS company_slug,
+                    c.logo_storage_key AS company_logo,
+                    loc.id AS location_id,
+                    loc.address_summary AS location_summary,
+                    ST_X(loc.coordinates::geometry) AS longitude,
+                    ST_Y(loc.coordinates::geometry) AS latitude,
+                    CASE 
+                        WHEN $13::float8 IS NOT NULL AND $14::float8 IS NOT NULL AND loc.coordinates IS NOT NULL THEN
+                            ST_Distance(loc.coordinates::geography, ST_SetSRID(ST_MakePoint($13, $14), 4326)::geography)
+                        ELSE NULL
+                    END AS distance_meters,
+                    CASE 
+                        WHEN $22::boolean = true THEN
+                            (
+                                SELECT 
+                                    CASE 
+                                        WHEN total_weight > 0.0 THEN
+                                            LEAST(100, GREATEST(0, ROUND((earned_points / total_weight) * 100.0)))::int2
+                                        ELSE 0::int2
+                                    END
+                                FROM (
+                                    SELECT 
+                                        (
+                                            (CASE WHEN CARDINALITY($23::uuid[]) > 0 THEN 45.0 ELSE 0.0 END) +
+                                            (CASE WHEN CARDINALITY($29::uuid[]) > 0 THEN 25.0 ELSE 0.0 END) +
+                                            (CASE WHEN $26::text IS NOT NULL OR ($31::float8 IS NOT NULL AND $32::float8 IS NOT NULL) THEN 15.0 ELSE 0.0 END) +
+                                            (CASE WHEN CARDINALITY($25::text[]) > 0 THEN 10.0 ELSE 0.0 END) +
+                                            (CASE WHEN $24::numeric IS NOT NULL THEN 5.0 ELSE 0.0 END)
+                                        )::float8 AS total_weight,
+                                        (
+                                            COALESCE(
+                                                (SELECT (COUNT(DISTINCT os.skill_id)::float8 / NULLIF(COUNT(DISTINCT os2.skill_id), 0)) * 45.0
+                                                 FROM opportunity_skills os2
+                                                 LEFT JOIN opportunity_skills os ON os.opportunity_id = os2.opportunity_id AND os.skill_id = ANY($23)
+                                                 WHERE os2.opportunity_id = o.id), 
+                                                0.0
+                                            ) +
+                                            (CASE WHEN CARDINALITY($29::uuid[]) > 0 AND o.category_id = ANY($29) THEN 25.0 ELSE 0.0 END) +
+                                            (CASE 
+                                                WHEN o.workplace_type = 'remote' THEN 15.0
+                                                WHEN $31::float8 IS NOT NULL AND $32::float8 IS NOT NULL AND loc.coordinates IS NOT NULL AND 
+                                                     ST_Distance(loc.coordinates::geography, ST_SetSRID(ST_MakePoint($31, $32), 4326)::geography) <= ($30::float8 * 1.5) THEN 15.0
+                                                WHEN $26::text IS NOT NULL AND loc.address_summary ILIKE '%' || $26 || '%' THEN 10.0
+                                                ELSE 0.0 
+                                             END) +
+                                            (CASE WHEN CARDINALITY($25::text[]) > 0 AND o.workplace_type = ANY($25) THEN 10.0 ELSE 0.0 END) +
+                                            (CASE WHEN $24::numeric IS NOT NULL AND COALESCE(o.salary_max, o.salary_min) >= $24 THEN 5.0 ELSE 0.0 END)
+                                        )::float8 AS earned_points
+                                ) scoring_calc
+                            )
+                        ELSE NULL 
+                    END AS match_score,
+                    CASE 
+                        WHEN $22::boolean = true THEN
+                            (SELECT COUNT(DISTINCT os.skill_id) FROM opportunity_skills os WHERE os.opportunity_id = o.id AND os.skill_id = ANY($23))
+                        ELSE NULL 
+                    END AS matched_skills_count,
+                    (CASE WHEN CARDINALITY($29::uuid[]) > 0 AND o.category_id = ANY($29) THEN true ELSE false END) AS category_matches,
+                    (CASE WHEN $24::numeric IS NOT NULL AND COALESCE(o.salary_max, o.salary_min) >= $24 THEN true ELSE false END) AS salary_matches,
+                    (CASE WHEN CARDINALITY($25::text[]) > 0 AND o.workplace_type = ANY($25) THEN true ELSE false END) AS workplace_matches,
+                    (CASE 
+                        WHEN o.workplace_type = 'remote' THEN true
+                        WHEN $26::text IS NOT NULL AND loc.address_summary ILIKE '%' || $26 || '%' THEN true
+                        WHEN $31::float8 IS NOT NULL AND loc.coordinates IS NOT NULL AND ST_Distance(loc.coordinates::geography, ST_SetSRID(ST_MakePoint($31, $32), 4326)::geography) <= ($30::float8 * 1.5) THEN true
+                        ELSE false 
+                     END) AS location_matches
+                FROM opportunities o
+                INNER JOIN companies c ON c.id = o.company_id
+                LEFT JOIN opportunity_locations ol ON ol.opportunity_id = o.id
+                LEFT JOIN locations loc ON loc.id = ol.location_id
+                WHERE o.status = 'published'
+                  AND (o.expires_at IS NULL OR o.expires_at > NOW())
+                  AND ($1::text IS NULL OR o.search_vector @@ plainto_tsquery('simple', $1))
+                  AND ($2::uuid IS NULL OR o.category_id = $2)
+                  AND ($3::uuid IS NULL OR o.occupation_id = $3)
+                  AND ($4::uuid IS NULL OR o.company_id = $4)
+                  AND ($5::text IS NULL OR o.opportunity_type = $5)
+                  AND ($6::text IS NULL OR o.workplace_type = $6)
+                  AND ($7::text IS NULL OR o.experience_level = $7)
+                  AND ($8::numeric IS NULL OR COALESCE(o.salary_max, o.salary_min) >= $8)
+                  AND ($28::numeric IS NULL OR COALESCE(o.salary_min, o.salary_max) <= $28)
+                  AND (
+                      $18::uuid[] IS NULL OR CARDINALITY($18) = 0 OR
+                      EXISTS (
+                          SELECT 1 FROM opportunity_skills os
+                          WHERE os.opportunity_id = o.id AND os.skill_id = ANY($18)
+                      )
+                  )
+                  AND ($19::boolean = true OR o.workplace_type != 'remote')
+                  AND (
+                      $15::float8 IS NULL OR
+                      (loc.coordinates IS NOT NULL AND ST_DWithin(loc.coordinates::geography, ST_SetSRID(ST_MakePoint($13, $14), 4326)::geography, $15))
+                  )
+                  AND (
+                      $9::float8 IS NULL OR
+                      (loc.coordinates IS NOT NULL AND (loc.coordinates && ST_MakeEnvelope($9, $10, $11, $12, 4326)))
+                  )
+                  AND (
+                      $21::text IS NULL OR
+                      (loc.address_summary ILIKE '%' || $21 || '%')
+                  )
+                  AND ($33::boolean IS NULL OR o.is_urgent = $33)
+                ORDER BY o.id, distance_meters ASC NULLS LAST
+            ),
+            counted_total AS (
+                SELECT COUNT(*)::int8 AS total_matching 
+                FROM filtered_opportunities d
+                WHERE ($27::int2 IS NULL OR d.match_score >= $27)
+            )
+            SELECT 
+                d.*,
+                c.total_matching
+            FROM filtered_opportunities d
+            CROSS JOIN counted_total c
+            WHERE ($16::timestamptz IS NULL OR (d.published_at, d.id) < ($16, $17))
+              AND ($27::int2 IS NULL OR d.match_score >= $27)
+            ORDER BY {order_clause}
+            LIMIT $20
+            "#
+        );
+
+        let effective_west = if is_bbox_mode { west } else { None };
+        let effective_south = if is_bbox_mode { south } else { None };
+        let effective_east = if is_bbox_mode { east } else { None };
+        let effective_north = if is_bbox_mode { north } else { None };
+        let effective_city = if is_city_mode { q.city.as_deref() } else { None };
+        let effective_radius = if is_radius_mode { radius_m } else { None };
+        let min_score_i16 = min_match_score.map(|s| s as i16);
+
+        let rows = sqlx::query_as::<_, SearchDbRow>(&sql)
+            .bind(&q.text)               // $1
+            .bind(q.category_id)         // $2
+            .bind(q.occupation_id)       // $3
+            .bind(q.company_id)          // $4
+            .bind(&q.opportunity_type)   // $5
+            .bind(&q.workplace_type)     // $6
+            .bind(&q.experience_level)   // $7
+            .bind(q.salary_min)          // $8
+            .bind(effective_west)        // $9
+            .bind(effective_south)       // $10
+            .bind(effective_east)        // $11
+            .bind(effective_north)       // $12
+            .bind(lon)                   // $13
+            .bind(lat)                   // $14
+            .bind(effective_radius)      // $15
+            .bind(cursor_published_at)   // $16
+            .bind(cursor_id)             // $17
+            .bind(&q.skill_ids)          // $18
+            .bind(q.include_remote)      // $19
+            .bind((limit + 1) as i64)    // $20
+            .bind(effective_city)        // $21
+            .bind(should_score)          // $22
+            .bind(cand_skill_ids)        // $23
+            .bind(cand_min_salary)       // $24
+            .bind(cand_workplaces)       // $25
+            .bind(cand_city)             // $26
+            .bind(min_score_i16)         // $27
+            .bind(q.salary_max)          // $28
+            .bind(cand_category_ids)     // $29
+            .bind(cand_radius)           // $30
+            .bind(cand_lon)              // $31
+            .bind(cand_lat)              // $32
+            .bind(q.is_urgent)           // $33
+            .fetch_all(&self.pool)
+            .await?;
+
+        let total_count = rows.first().and_then(|r| r.total_matching).unwrap_or(0);
+        let has_more = rows.len() > limit;
+        let items: Vec<OpportunitySearchResult> = rows.into_iter().take(limit).map(SearchDbRow::to_domain).collect();
+
+        let next_cursor = if has_more {
+            items.last().and_then(|it| {
+                it.published_at.map(|pub_at| SearchCursor { published_at: pub_at, id: it.id }.encode())
+            })
+        } else {
+            None
+        };
+
+        let national_total: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM opportunities WHERE status = 'published' AND (expires_at IS NULL OR expires_at > NOW())"
+        )
+        .fetch_one(&self.pool)
+        .await
+        .unwrap_or(0);
+
+        let (scope_str, detected_city_name) = if is_radius_mode {
+            ("radius", None)
+        } else if is_city_mode {
+            ("city", q.city.clone())
+        } else if is_bbox_mode {
+            let city_from_db: Option<String> = sqlx::query_scalar(
+                r#"
+                SELECT TRIM(split_part(loc.address_summary, '،', 1)) AS city_name
+                FROM locations loc
+                WHERE loc.coordinates && ST_MakeEnvelope($1, $2, $3, $4, 4326)
+                  AND loc.address_summary IS NOT NULL
+                GROUP BY city_name
+                ORDER BY COUNT(*) DESC
+                LIMIT 1
+                "#
+            )
+            .bind(west.unwrap())
+            .bind(south.unwrap())
+            .bind(east.unwrap())
+            .bind(north.unwrap())
+            .fetch_optional(&self.pool)
+            .await
+            .unwrap_or(None);
+
+            ("viewport", city_from_db)
+        } else {
+            ("national", None)
+        };
+
+        let city_total_jobs = if let Some(ref c_name) = detected_city_name {
+            let count: i64 = sqlx::query_scalar(
+                r#"
+                SELECT COUNT(DISTINCT o.id)
+                FROM opportunities o
+                INNER JOIN opportunity_locations ol ON ol.opportunity_id = o.id
+                INNER JOIN locations loc ON loc.id = ol.location_id
+                WHERE o.status = 'published'
+                  AND (o.expires_at IS NULL OR o.expires_at > NOW())
+                  AND (loc.address_summary ILIKE '%' || $1 || '%')
+                "#
+            )
+            .bind(c_name)
+            .fetch_one(&self.pool)
+            .await
+            .unwrap_or(0);
+            Some(count)
+        } else {
+            None
+        };
+
+        let spatial_context = SpatialContext {
+            scope: scope_str.to_string(),
+            detected_city: detected_city_name,
+            city_total_jobs,
+            national_total_jobs: national_total,
+        };
+
+        Ok(SearchPageResult {
+            items,
+            total_count,
+            next_cursor,
+            has_more,
+            spatial_context,
+        })
+    }
+
+    pub async fn list_map_pins(
+        &self,
+        q_text: Option<&str>,
+        bbox: Option<&BoundingBox>,
+        point: Option<&GeoPoint>,
+        radius: Option<&Radius>,
+        city: Option<&str>,
+        category_id: Option<Uuid>,
+        skill_ids: &[Uuid],
+        opportunity_type: Option<&str>,
+        workplace_type: Option<&str>,
+        experience_level: Option<&str>,
+        salary_min: Option<Decimal>,
+        salary_max: Option<Decimal>,
+        is_urgent: Option<bool>,
+        limit: usize,
+    ) -> Result<Vec<MapPinSummary>, StorageError> {
+        let (lon, lat) = point
+            .map(|p| (Some(p.longitude()), Some(p.latitude())))
+            .unwrap_or((None, None));
+
+        let radius_m = radius.map(|r| Some(r.as_meters())).unwrap_or(None);
+        let is_radius_mode = radius_m.is_some() && lon.is_some() && lat.is_some();
+
+        let (west, south, east, north) = if !is_radius_mode {
+            bbox.map(|b| (Some(b.west()), Some(b.south()), Some(b.east()), Some(b.north())))
+                .unwrap_or((None, None, None, None))
+        } else {
+            (None, None, None, None)
+        };
+
+        let is_bbox_mode = !is_radius_mode && west.is_some();
+        let effective_city = if !is_radius_mode && !is_bbox_mode { city } else { None };
+
+        let sql = r#"
+            SELECT 
+                loc.id AS location_id,
+                ST_X(loc.coordinates::geometry) AS longitude,
+                ST_Y(loc.coordinates::geometry) AS latitude,
+                loc.address_summary,
+                COUNT(DISTINCT o.id)::int8 AS opportunity_count,
+                COALESCE((ARRAY_AGG(DISTINCT cat.name) FILTER (WHERE cat.name IS NOT NULL))[1:3], ARRAY[]::text[]) AS top_categories,
+                COALESCE((ARRAY_AGG(DISTINCT c.name) FILTER (WHERE c.name IS NOT NULL))[1:3], ARRAY[]::text[]) AS sample_companies,
+                MIN(o.salary_min) AS min_salary,
+                MAX(o.salary_max) AS max_salary,
+                COALESCE(MAX(o.salary_currency), 'IRR') AS salary_currency
+            FROM locations loc
+            INNER JOIN opportunity_locations ol ON ol.location_id = loc.id
+            INNER JOIN opportunities o ON o.id = ol.opportunity_id
+            INNER JOIN companies c ON c.id = o.company_id
+            LEFT JOIN categories cat ON cat.id = o.category_id
+            WHERE o.status = 'published'
+              AND (o.expires_at IS NULL OR o.expires_at > NOW())
+              AND ($1::text IS NULL OR o.search_vector @@ plainto_tsquery('simple', $1))
+              AND ($2::float8 IS NULL OR (loc.coordinates && ST_MakeEnvelope($2, $3, $4, $5, 4326)))
+              AND ($6::float8 IS NULL OR ST_DWithin(loc.coordinates::geography, ST_SetSRID(ST_MakePoint($7, $8), 4326)::geography, $6))
+              AND ($9::text IS NULL OR loc.address_summary ILIKE '%' || $9 || '%')
+              AND ($10::uuid IS NULL OR o.category_id = $10)
+              AND ($11::text IS NULL OR o.opportunity_type = $11)
+              AND ($12::text IS NULL OR o.workplace_type = $12)
+              AND ($13::text IS NULL OR o.experience_level = $13)
+              AND ($14::numeric IS NULL OR COALESCE(o.salary_max, o.salary_min) >= $14)
+              AND ($15::numeric IS NULL OR COALESCE(o.salary_min, o.salary_max) <= $15)
+              AND (
+                  $16::uuid[] IS NULL OR CARDINALITY($16) = 0 OR
+                  EXISTS (
+                      SELECT 1 FROM opportunity_skills os
+                      WHERE os.opportunity_id = o.id AND os.skill_id = ANY($16)
+                  )
+              )
+              AND ($18::boolean IS NULL OR o.is_urgent = $18)
+            GROUP BY loc.id, loc.coordinates, loc.address_summary
+            ORDER BY opportunity_count DESC
+            LIMIT $17
+        "#;
+
+        let rows = sqlx::query_as::<_, MapPinDbRow>(sql)
+            .bind(q_text)
+            .bind(west)
+            .bind(south)
+            .bind(east)
+            .bind(north)
+            .bind(if is_radius_mode { radius_m } else { None })
+            .bind(lon)
+            .bind(lat)
+            .bind(effective_city)
+            .bind(category_id)
+            .bind(opportunity_type)
+            .bind(workplace_type)
+            .bind(experience_level)
+            .bind(salary_min)
+            .bind(salary_max)
+            .bind(skill_ids)
+            .bind(limit as i64)
+            .bind(is_urgent)
+            .fetch_all(&self.pool)
+            .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| MapPinSummary {
+                location_id: r.location_id,
+                coordinates: [r.longitude, r.latitude],
+                address_summary: r.address_summary,
+                opportunity_count: r.opportunity_count,
+                top_categories: r.top_categories,
+                sample_companies: r.sample_companies,
+                min_salary: r.min_salary,
+                max_salary: r.max_salary,
+                salary_currency: r.salary_currency,
+            })
+            .collect())
+    }
+
+    pub async fn list_by_location(&self, location_id: Uuid) -> Result<Vec<OpportunitySearchResult>, StorageError> {
+        let sql = r#"
+            SELECT 
+                o.id,
+                o.title,
+                SUBSTRING(o.description FROM 1 FOR 180) AS description,
+                o.opportunity_type,
+                o.workplace_type,
+                o.remote_scope,
+                o.experience_level,
+                o.salary_min,
+                o.salary_max,
+                o.salary_currency,
+                o.salary_period,
+                o.published_at,
+                o.is_urgent,
+                o.is_featured,
+                c.id AS company_id,
+                c.name AS company_name,
+                c.slug AS company_slug,
+                c.logo_storage_key AS company_logo,
+                loc.id AS location_id,
+                loc.address_summary AS location_summary,
+                ST_X(loc.coordinates::geometry) AS longitude,
+                ST_Y(loc.coordinates::geometry) AS latitude,
+                NULL::float8 AS distance_meters,
+                NULL::int8 AS total_matching,
+                NULL::int2 AS match_score,
+                NULL::int8 AS matched_skills_count,
+                NULL::boolean AS category_matches,
+                NULL::boolean AS salary_matches,
+                NULL::boolean AS workplace_matches,
+                NULL::boolean AS location_matches
+            FROM opportunities o
+            INNER JOIN companies c ON c.id = o.company_id
+            INNER JOIN opportunity_locations ol ON ol.opportunity_id = o.id
+            INNER JOIN locations loc ON loc.id = ol.location_id
+            WHERE ol.location_id = $1
+              AND o.status = 'published'
+              AND (o.expires_at IS NULL OR o.expires_at > NOW())
+            ORDER BY o.published_at DESC
+        "#;
+
+        let rows = sqlx::query_as::<_, SearchDbRow>(sql)
+            .bind(location_id)
+            .fetch_all(&self.pool)
+            .await?;
+
+        Ok(rows.into_iter().map(SearchDbRow::to_domain).collect())
+    }
+}
+
+--------------------------------------------------
+FILE: crates\biz-storage\src\lib.rs
+--------------------------------------------------
+pub mod application_repo;
+pub mod candidate_repo;
+pub mod company_repo;
+pub mod discovery_repo;
+pub mod error;
+pub mod governance_repo;
+pub mod opportunity_repo;
+pub mod saved_repo;
+pub mod security;
+pub mod taxonomy_repo;
+pub mod token_repo;
+pub mod token_service;
+pub mod user_repo;
+pub mod finance_repo;
+pub use finance_repo::FinanceRepository;
+pub use application_repo::ApplicationRepository;
+pub use candidate_repo::CandidateRepository;
+pub use company_repo::CompanyRepository;
+pub use discovery_repo::DiscoveryRepository;
+pub use error::StorageError;
+pub use governance_repo::GovernanceRepository;
+pub use opportunity_repo::OpportunityRepository;
+pub use saved_repo::SavedRepository;
+pub use security::PasswordService;
+pub use taxonomy_repo::TaxonomyRepository;
+pub use token_repo::TokenRepository;
+pub use token_service::{Claims, TokenPair, TokenService};
+pub use user_repo::UserRepository;
+
+--------------------------------------------------
+FILE: apps\biz-api\src\handlers\discovery.rs
+--------------------------------------------------
+use crate::error::ApiError;
+use crate::extractors::auth::{AuthenticatedUser, MaybeAuthenticatedUser};
+use crate::state::AppState;
+use axum::{
+    extract::{Path, Query, State},
+    response::IntoResponse,
+    Json,
+};
+use biz_application::discovery::{GetMapPinsRequest, SearchOpportunitiesRequest};
+use biz_domain::discovery::{MapPinSummary, OpportunitySearchResult, SearchPageResult};
+use uuid::Uuid;
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/opportunities/search",
+    params(SearchOpportunitiesRequest),
+    responses((status = 200, description = "Search results returned successfully", body = SearchPageResult)),
+    tag = "Discovery"
+)]
+pub async fn search_opportunities_handler(
+    State(state): State<AppState>,
+    maybe_auth: MaybeAuthenticatedUser,
+    Query(req): Query<SearchOpportunitiesRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let result = state.discovery_use_cases.search(maybe_auth.0, req).await?;
+    Ok(Json(result))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/opportunities/recommended",
+    responses((status = 200, description = "Personalized opportunity feed ranked by resume match score", body = SearchPageResult)),
+    tag = "Discovery"
+)]
+pub async fn get_recommended_opportunities_handler(
+    State(state): State<AppState>,
+    auth: AuthenticatedUser,
+) -> Result<impl IntoResponse, ApiError> {
+    let result = state.discovery_use_cases.get_recommended_opportunities(auth.user_id, 30).await?;
+    Ok(Json(result))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/opportunities/map-pins",
+    params(GetMapPinsRequest),
+    responses((status = 200, description = "Aggregated map pin clusters with job counts", body = Vec<MapPinSummary>)),
+    tag = "Discovery"
+)]
+pub async fn get_map_pins_handler(
+    State(state): State<AppState>,
+    Query(req): Query<GetMapPinsRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let pins = state.discovery_use_cases.get_map_pins(req).await?;
+    Ok(Json(pins))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/opportunities/by-location/{location_id}",
+    responses((status = 200, description = "Active opportunities at this specific map marker", body = Vec<OpportunitySearchResult>)),
+    tag = "Discovery"
+)]
+pub async fn get_opportunities_by_location_handler(
+    State(state): State<AppState>,
+    Path(location_id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    let items = state.discovery_use_cases.get_by_location(location_id).await?;
+    Ok(Json(items))
+}
+
+--------------------------------------------------
+FILE: apps\biz-api\src\handlers\mod.rs
+--------------------------------------------------
+pub mod application;
+pub mod auth;
+pub mod candidate;
+pub mod company;
+pub mod discovery;
+pub mod governance;
+pub mod opportunity;
+pub mod saved;
+pub mod taxonomy;
+pub mod finance;
+
+--------------------------------------------------
+FILE: apps\biz-api\src\openapi.rs
+--------------------------------------------------
+use utoipa::OpenApi;
+
+use crate::handlers::auth::RefreshTokenRequest;
+use crate::handlers::taxonomy::SkillQuery;
+use biz_application::application::{
+    ApplicantSummaryDto, ApplicationDossierDto, ApplicationDto, ChangeApplicationStatusCommand,
+    SubmitApplicationCommand,
+};
+use biz_application::candidate::{
+    AddEducationCommand, AddExperienceCommand, AddLanguageCommand, AddReferenceCommand,
+    AddResumeCommand, CandidatePreferencesDto, CandidateProfileDto, EducationDto, ExperienceDto,
+    LanguageDto, ReferenceDto, ResumeDto, SetSkillsCommand, SkillDto, TrackedApplicationDto,
+    UpdateProfileCommand,
+};
+
+use biz_application::company::{
+    AddCompanyLocationCommand, AddMemberCommand, CompanyDto, CompanyLocationDto,
+    CompanyMemberDto, CreateCompanyCommand, UpdateCompanyCommand,
+};
+use biz_application::discovery::{GetMapPinsRequest, SearchOpportunitiesRequest};
+use biz_application::governance::{
+    CompanyVerificationDto, CreateReportCommand, ReviewVerificationCommand,
+    SubmitVerificationCommand,
+};
+use biz_application::identity::{AuthResponseDto, LoginCommand, RegisterCommand};
+use biz_application::opportunity::CreateOpportunityCommand;
+use biz_application::saved::SaveSearchCommand;
+
+use biz_domain::application::{Application, ApplicationStatus};
+use biz_domain::discovery::{CompanySummary, MapPinSummary, OpportunitySearchResult, SearchPageResult, SpatialContext};
+use biz_domain::governance::{Report, VerificationStatus};
+use biz_domain::opportunity::{Opportunity, OpportunityStatus, OpportunityType, RemoteScope, Salary, WorkplaceType};
+use biz_domain::taxonomy::{Category, CityTaxonomy, Country, ExperienceLevel, Industry, Occupation, Skill};
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        // Auth
+        crate::handlers::auth::register_handler,
+        crate::handlers::auth::login_handler,
+        crate::handlers::auth::refresh_handler,
+        crate::handlers::auth::logout_handler,
+        crate::handlers::auth::me_handler,
+
+        // Candidate Profile & Actions
+        crate::handlers::candidate::get_my_profile_handler,
+        crate::handlers::candidate::update_my_profile_handler,
+        crate::handlers::candidate::add_experience_handler,
+        crate::handlers::candidate::delete_experience_handler,
+        crate::handlers::candidate::add_education_handler,
+        crate::handlers::candidate::delete_education_handler,
+        crate::handlers::candidate::add_language_handler,
+        crate::handlers::candidate::delete_language_handler,
+        crate::handlers::candidate::add_reference_handler,
+        crate::handlers::candidate::delete_reference_handler,
+        crate::handlers::candidate::add_resume_handler,
+        crate::handlers::candidate::delete_resume_handler,
+        crate::handlers::candidate::set_skills_handler,
+        crate::handlers::candidate::get_preferences_handler,
+        crate::handlers::candidate::set_preferences_handler,
+        crate::handlers::candidate::list_my_applications_handler,
+
+        // Companies Management & Showcase
+        crate::handlers::company::create_company_handler,
+        crate::handlers::company::update_company_handler,
+        crate::handlers::company::get_company_handler,
+        crate::handlers::company::add_company_location_handler,
+        crate::handlers::company::list_members_handler,
+        crate::handlers::company::add_member_handler,
+        crate::handlers::company::list_company_opportunities_handler,
+        crate::handlers::company::list_public_company_opportunities_handler,
+        crate::handlers::company::list_opportunity_applicants_handler,
+
+        // Discovery, Recommendations & Map Bridge
+        crate::handlers::discovery::search_opportunities_handler,
+        crate::handlers::discovery::get_recommended_opportunities_handler,
+        crate::handlers::discovery::get_map_pins_handler,
+        crate::handlers::discovery::get_opportunities_by_location_handler,
+        crate::handlers::opportunity::get_opportunity_handler,
+        crate::handlers::opportunity::track_opportunity_click_handler,
+
+        // Opportunities Lifecycle
+        crate::handlers::opportunity::create_opportunity_handler,
+        crate::handlers::opportunity::publish_opportunity_handler,
+        crate::handlers::opportunity::pause_opportunity_handler,
+        crate::handlers::opportunity::resume_opportunity_handler,
+        crate::handlers::opportunity::close_opportunity_handler,
+
+        // Applications & Employer ATS Dossier
+        crate::handlers::application::submit_application_handler,
+        crate::handlers::application::get_application_dossier_handler,
+        crate::handlers::application::change_application_status_handler,
+
+        // Saved Items
+        crate::handlers::saved::save_opportunity_handler,
+        crate::handlers::saved::remove_saved_opportunity_handler,
+        crate::handlers::saved::list_saved_opportunities_handler,
+        crate::handlers::saved::save_company_handler,
+        crate::handlers::saved::remove_saved_company_handler,
+        crate::handlers::saved::list_saved_companies_handler,
+        crate::handlers::saved::save_search_handler,
+        crate::handlers::saved::list_saved_searches_handler,
+
+        // Taxonomies
+        crate::handlers::taxonomy::list_categories_handler,
+        crate::handlers::taxonomy::list_industries_handler,
+        crate::handlers::taxonomy::list_occupations_handler,
+        crate::handlers::taxonomy::resolve_skill_handler,
+        crate::handlers::taxonomy::list_countries_handler,
+        crate::handlers::taxonomy::list_cities_handler,
+
+        // Governance & Trust
+        crate::handlers::governance::report_opportunity_handler,
+        crate::handlers::governance::submit_verification_handler,
+        crate::handlers::governance::list_pending_verifications_handler,
+        crate::handlers::governance::review_verification_handler,
+        crate::handlers::governance::list_reports_handler
+    ),
+    components(
+        schemas(
+            RegisterCommand,
+            LoginCommand,
+            RefreshTokenRequest,
+            AuthResponseDto,
+            UpdateProfileCommand,
+            AddExperienceCommand,
+            ExperienceDto,
+            AddEducationCommand,
+            EducationDto,
+            AddLanguageCommand,
+            LanguageDto,
+            AddReferenceCommand,
+            ReferenceDto,
+            AddResumeCommand,
+            ResumeDto,
+            SkillDto,
+            CandidateProfileDto,
+            SetSkillsCommand,
+            CandidatePreferencesDto,
+            TrackedApplicationDto,
+            CreateCompanyCommand,
+            UpdateCompanyCommand,
+            CompanyDto,
+            AddCompanyLocationCommand,
+            AddMemberCommand,
+            CompanyMemberDto,
+            CreateOpportunityCommand,
+            SubmitApplicationCommand,
+            ChangeApplicationStatusCommand,
+            ApplicationDto,
+            Application,
+            ApplicationStatus,
+            ApplicationDossierDto,
+            SaveSearchCommand,
+            CreateReportCommand,
+            SubmitVerificationCommand,
+            ReviewVerificationCommand,
+            CompanyVerificationDto,
+            VerificationStatus,
+            Report,
+            Opportunity,
+            OpportunityType,
+            WorkplaceType,
+            RemoteScope,
+            ExperienceLevel,
+            Salary,
+            OpportunityStatus,
+            Category,
+            Industry,
+            Occupation,
+            Skill,
+            Country,
+            CityTaxonomy,
+            CompanySummary,
+            OpportunitySearchResult,
+            SearchPageResult,
+            SpatialContext,
+            MapPinSummary
+        )
+    ),
+    tags(
+        (name = "Auth", description = "Authentication, tokens & sessions"),
+        (name = "Candidate Profile", description = "Talent profile, experiences, educations, languages, references, resumes & skills"),
+        (name = "Companies", description = "Company profile, branch locations & team membership"),
+        (name = "Employer ATS", description = "Applicant tracking system, dossiers & opportunity pipeline"),
+        (name = "Opportunities", description = "Opportunity lifecycle management (Draft, Publish, Pause, Close)"),
+        (name = "Discovery", description = "Search, AI Recommendations & Map Pin bridging"),
+        (name = "Taxonomies", description = "Standard industries, job categories, occupations & skills autocomplete"),
+        (name = "Applications", description = "Candidate job applications pipeline"),
+        (name = "Saved", description = "Saved opportunities, companies & searches"),
+        (name = "Governance & Trust", description = "Platform trust, company legal verifications & moderation reports")
+    )
+)]
+pub struct ApiDoc;
+
+--------------------------------------------------
+FILE: apps\biz-api\src\main.rs
+--------------------------------------------------
+mod error;
+mod extractors;
+mod handlers;
+mod openapi;
+mod state;
+
+use axum::{
+    routing::{delete, get, post, put},
+    Router,
+};
+use geo_storage::{create_connection_pool, run_migrations, DatabaseConfig};
+use openapi::ApiDoc;
+use state::AppState;
+use std::net::SocketAddr;
+use tower_http::cors::{Any, CorsLayer};
+use tower_http::trace::TraceLayer;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "biz_api=info,tower_http=info".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    tracing::info!("Initializing Map-First Business Backend API Service...");
+
+    let db_config = DatabaseConfig {
+        database_url: std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+            "postgres://map_user:map_password@localhost:5433/map_platform".to_string()
+        }),
+        max_connections: 20,
+        min_connections: 5,
+        connect_timeout_sec: 10,
+    };
+
+    let pool = create_connection_pool(&db_config).await?;
+    tracing::info!("Connected to PostgreSQL/PostGIS. Running business migrations...");
+    run_migrations(&pool).await?;
+    tracing::info!("Business migrations applied successfully.");
+
+    if let Ok(raw_pass) = biz_domain::identity::RawPassword::new("Password1234!") {
+        if let Ok(real_hash) = biz_storage::PasswordService::hash_password(&raw_pass) {
+            let _ = sqlx::query("UPDATE users SET password_hash = $1 WHERE email IN ('demo@geojob.ir', 'employer@geojob.ir', 'verified_employer@geojob.ir', 'pending_employer@geojob.ir')")
+                .bind(real_hash)
+                .execute(&pool)
+                .await;
+            tracing::info!("Verified cryptographic Argon2id password hash for all demo users");
+        }
+    }
+
+    let jwt_secret = std::env::var("JWT_SECRET")
+        .unwrap_or_else(|_| "super-secret-jwt-key-change-in-production-123456".to_string());
+
+    let app_state = AppState::new(pool, jwt_secret);
+
+    let api_router = Router::new()
+        // 🔐 احراز هویت پیامکی (OTP)، آنبوردینگ هویتی ۳ پرسونایی و ورود ایمیلی
+        .route("/auth/otp/send", post(handlers::auth::send_otp_handler))
+        .route("/auth/otp/verify", post(handlers::auth::verify_otp_handler))
+        .route("/auth/onboarding", post(handlers::auth::onboarding_handler))
+        .route("/auth/register", post(handlers::auth::register_handler))
+        .route("/auth/login", post(handlers::auth::login_handler))
+        .route("/auth/refresh", post(handlers::auth::refresh_handler))
+        .route("/auth/logout", post(handlers::auth::logout_handler))
+        .route("/me", get(handlers::auth::me_handler))
+        .route("/me/companies", get(handlers::company::list_my_companies_handler))
+        
+        // Candidate Profile, Experience, Education, Languages, References & Resumes
+        .route("/candidates/me", get(handlers::candidate::get_my_profile_handler).put(handlers::candidate::update_my_profile_handler))
+        .route("/candidates/me/experiences", post(handlers::candidate::add_experience_handler))
+        .route("/candidates/me/experiences/:id", delete(handlers::candidate::delete_experience_handler))
+        .route("/candidates/me/educations", post(handlers::candidate::add_education_handler))
+        .route("/candidates/me/educations/:id", delete(handlers::candidate::delete_education_handler))
+        .route("/candidates/me/languages", post(handlers::candidate::add_language_handler))
+        .route("/candidates/me/languages/:id", delete(handlers::candidate::delete_language_handler))
+        .route("/candidates/me/references", post(handlers::candidate::add_reference_handler))
+        .route("/candidates/me/references/:id", delete(handlers::candidate::delete_reference_handler))
+        .route("/candidates/me/resumes", post(handlers::candidate::add_resume_handler))
+        .route("/candidates/me/resumes/:id", delete(handlers::candidate::delete_resume_handler))
+        .route("/candidates/me/skills", put(handlers::candidate::set_skills_handler))
+        .route("/candidates/me/preferences", get(handlers::candidate::get_preferences_handler).put(handlers::candidate::set_preferences_handler))
+        .route("/candidates/me/applications", get(handlers::candidate::list_my_applications_handler))
+
+        // Headhunting & Talent Map for Employers
+        .route("/talents/search", get(handlers::candidate::search_talents_handler))
+        .route("/opportunities/:id/matched-candidates", get(handlers::candidate::get_matched_candidates_handler))
+        .route("/candidates/:id/invite", post(handlers::candidate::invite_candidate_handler))
+
+        // Companies Management, Onboarding, Showcase & Branches
+        .route("/companies/onboard", post(handlers::company::onboard_company_handler))
+        .route("/companies", post(handlers::company::create_company_handler))
+        .route("/companies/:id", get(handlers::company::get_company_handler).put(handlers::company::update_company_handler))
+        .route("/companies/:id/locations", post(handlers::company::add_company_location_handler).get(handlers::company::list_company_locations_handler))
+        .route("/companies/:id/members", get(handlers::company::list_members_handler).post(handlers::company::add_member_handler))
+        .route("/companies/:id/opportunities", get(handlers::company::list_company_opportunities_handler).post(handlers::opportunity::create_opportunity_handler))
+        .route("/companies/:id/public-opportunities", get(handlers::company::list_public_company_opportunities_handler))
+
+        // Discovery / Search, Recommended Feed & Map Bridge
+        .route("/opportunities/search", get(handlers::discovery::search_opportunities_handler))
+        .route("/opportunities/recommended", get(handlers::discovery::get_recommended_opportunities_handler))
+        .route("/opportunities/map-pins", get(handlers::discovery::get_map_pins_handler))
+        .route("/opportunities/by-location/:location_id", get(handlers::discovery::get_opportunities_by_location_handler))
+        .route("/opportunities/:id", get(handlers::opportunity::get_opportunity_handler))
+        .route("/opportunities/:id/track-click", post(handlers::opportunity::track_opportunity_click_handler))
+
+        // Opportunities Lifecycle & Paid Map Promotions
+        .route("/opportunities/:id/publish", post(handlers::opportunity::publish_opportunity_handler))
+        .route("/opportunities/:id/pause", post(handlers::opportunity::pause_opportunity_handler))
+        .route("/opportunities/:id/resume", post(handlers::opportunity::resume_opportunity_handler))
+        .route("/opportunities/:id/close", post(handlers::opportunity::close_opportunity_handler))
+        .route("/opportunities/:id/ladder", post(handlers::opportunity::ladder_opportunity_handler))
+        .route("/opportunities/:id/feature-pin", post(handlers::opportunity::feature_opportunity_pin_handler))
+
+        // Employer ATS / Applications
+        .route("/opportunities/:id/applications", post(handlers::application::submit_application_handler).get(handlers::company::list_opportunity_applicants_handler))
+        .route("/applications/:id", get(handlers::application::get_application_dossier_handler))
+        .route("/applications/:id/status", post(handlers::application::change_application_status_handler))
+
+        // Saved Items (Opportunities, Companies, Searches)
+        .route("/opportunities/:id/save", post(handlers::saved::save_opportunity_handler).delete(handlers::saved::remove_saved_opportunity_handler))
+        .route("/me/saved-opportunities", get(handlers::saved::list_saved_opportunities_handler))
+        .route("/companies/:id/save", post(handlers::saved::save_company_handler).delete(handlers::saved::remove_saved_company_handler))
+        .route("/me/saved-companies", get(handlers::saved::list_saved_companies_handler))
+        .route("/me/saved-searches", post(handlers::saved::save_search_handler).get(handlers::saved::list_saved_searches_handler))
+
+        // 💳 زیرساخت مالی، کیف پول، تعرفه‌ها، فاکتورها و خرید دسترسی کارجویان
+        .route("/companies/:id/wallet", get(handlers::finance::get_company_wallet_handler))
+        .route("/finance/tariffs", get(handlers::finance::list_tariffs_handler))
+        .route("/companies/:id/finance/invoices", post(handlers::finance::create_invoice_handler))
+        .route("/companies/:id/finance/invoices/:invoice_id/pay-mock", post(handlers::finance::mock_pay_invoice_handler))
+        .route("/companies/:id/finance/transactions", get(handlers::finance::list_wallet_transactions_handler))
+        .route("/companies/:id/talents/:candidate_id/unlock", post(handlers::finance::unlock_talent_contact_handler))
+
+        // Taxonomies
+        .route("/taxonomies/categories", get(handlers::taxonomy::list_categories_handler))
+        .route("/taxonomies/industries", get(handlers::taxonomy::list_industries_handler))
+        .route("/taxonomies/occupations", get(handlers::taxonomy::list_occupations_handler))
+        .route("/taxonomies/skills/resolve", get(handlers::taxonomy::resolve_skill_handler))
+        .route("/taxonomies/countries", get(handlers::taxonomy::list_countries_handler))
+        .route("/taxonomies/cities", get(handlers::taxonomy::list_cities_handler))
+
+        // Governance, Verification & Reports
+        .route("/opportunities/:id/reports", post(handlers::governance::report_opportunity_handler))
+        .route("/companies/:id/verifications", post(handlers::governance::submit_verification_handler))
+        .route("/admin/verifications", get(handlers::governance::list_pending_verifications_handler))
+        .route("/admin/verifications/:id/review", post(handlers::governance::review_verification_handler))
+        .route("/admin/reports", get(handlers::governance::list_reports_handler));
+
+    let app = Router::new()
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
+        .nest("/api/v1", api_router)
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Any)
+                .allow_headers(Any),
+        )
+        .layer(TraceLayer::new_for_http())
+        .with_state(app_state);
+
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8081));
+    tracing::info!("Business API Server listening on http://{}", addr);
+    tracing::info!("Swagger UI available at http://{}/swagger-ui", addr);
+
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await?;
+
+    Ok(())
+}
+
+--------------------------------------------------
+FILE: crates\geo-query\src\clustering.rs
+--------------------------------------------------
+use crate::error::QueryError;
+use crate::models::LocationCluster;
+use geo_types::{BoundingBox, GeoPoint};
+use sqlx::PgPool;
+
+#[derive(Debug, sqlx::FromRow)]
+struct ClusterDbRow {
+    count: i64,
+    center_lon: f64,
+    center_lat: f64,
+    west: f64,
+    south: f64,
+    east: f64,
+    north: f64,
+}
+
+/// Aggregates only employer opportunities within a bounding box.
+/// OSM background points are strictly excluded.
+pub async fn cluster_locations_in_bbox(
+    pool: &PgPool,
+    bbox: &BoundingBox,
+    grid_size: f64,
+) -> Result<Vec<LocationCluster>, QueryError> {
+    let sql = r#"
+        SELECT 
+            COUNT(*) AS count,
+            ST_X(ST_Centroid(ST_Collect(coordinates::geometry))) AS center_lon,
+            ST_Y(ST_Centroid(ST_Collect(coordinates::geometry))) AS center_lat,
+            ST_XMin(ST_Extent(coordinates::geometry)) AS west,
+            ST_YMin(ST_Extent(coordinates::geometry)) AS south,
+            ST_XMax(ST_Extent(coordinates::geometry)) AS east,
+            ST_YMax(ST_Extent(coordinates::geometry)) AS north
+        FROM locations
+        WHERE coordinates && ST_MakeEnvelope($1, $2, $3, $4, 4326)
+          AND source = 'opportunity'
+        GROUP BY ST_SnapToGrid(coordinates, $5)
+        HAVING COUNT(*) > 1
+    "#;
+
+    let rows = sqlx::query_as::<_, ClusterDbRow>(sql)
+        .bind(bbox.west())
+        .bind(bbox.south())
+        .bind(bbox.east())
+        .bind(bbox.north())
+        .bind(grid_size)
+        .fetch_all(pool)
+        .await?;
+
+    let mut clusters = Vec::with_capacity(rows.len());
+    for row in rows {
+        let center = GeoPoint::new(row.center_lon, row.center_lat)?;
+        let bounds = BoundingBox::new(row.west, row.south, row.east, row.north)?;
+        clusters.push(LocationCluster {
+            count: row.count,
+            center,
+            bounds,
+        });
+    }
+
+    Ok(clusters)
+}
+
+--------------------------------------------------
+FILE: crates\geo-query\src\bbox_query.rs
+--------------------------------------------------
+use crate::error::QueryError;
+use geo_domain::Location;
+use geo_storage::models::LocationDbRow;
+use geo_types::BoundingBox;
+use sqlx::PgPool;
+
+const MAX_BBOX_LIMIT: usize = 1000;
+const DEFAULT_BBOX_LIMIT: usize = 200;
+
+#[derive(Debug, Clone)]
+pub struct BBoxSearchOptions {
+    pub limit: Option<usize>,
+    pub source: Option<String>,
+}
+
+pub async fn find_locations_in_bbox(
+    pool: &PgPool,
+    bbox: &BoundingBox,
+    options: BBoxSearchOptions,
+) -> Result<Vec<Location>, QueryError> {
+    let limit = options.limit.unwrap_or(DEFAULT_BBOX_LIMIT);
+    if limit > MAX_BBOX_LIMIT {
+        return Err(QueryError::LimitExceeded {
+            requested: limit,
+            max: MAX_BBOX_LIMIT,
+        });
+    }
+
+    // Filters out background OSM data by default so only employer-posted opportunities become markers.
+    let sql = r#"
+        SELECT 
+            id,
+            ST_X(coordinates::geometry) AS longitude,
+            ST_Y(coordinates::geometry) AS latitude,
+            address_summary,
+            precision,
+            source,
+            source_id,
+            metadata,
+            created_at,
+            updated_at
+        FROM locations
+        WHERE coordinates && ST_MakeEnvelope($1, $2, $3, $4, 4326)
+          AND (
+              ($6::text IS NOT NULL AND source = $6)
+              OR ($6::text IS NULL AND source != 'osm')
+          )
+        LIMIT $5
+    "#;
+
+    let rows = sqlx::query_as::<_, LocationDbRow>(sql)
+        .bind(bbox.west())
+        .bind(bbox.south())
+        .bind(bbox.east())
+        .bind(bbox.north())
+        .bind(limit as i64)
+        .bind(options.source)
+        .fetch_all(pool)
+        .await?;
+
+    rows.into_iter()
+        .map(|row| Location::try_from(row).map_err(QueryError::from))
+        .collect()
+}
+
+--------------------------------------------------
+FILE: crates\geo-query\src\models.rs
+--------------------------------------------------
+use geo_domain::Location;
+use geo_types::{BoundingBox, Distance, GeoPoint};
+use serde::{Deserialize, Serialize};
+
+/// Location result augmented with distance relative to the query point.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NearbyLocation {
+    pub location: Location,
+    pub distance: Distance,
+}
+
+/// Represents an aggregated cluster of locations for map viewports.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LocationCluster {
+    pub count: i64,
+    pub center: GeoPoint,
+    pub bounds: BoundingBox,
+}
+
+--------------------------------------------------
+FILE: crates\geo-query\src\lib.rs
+--------------------------------------------------
+pub mod bbox_query;
+pub mod clustering;
+pub mod error;
+pub mod models;
+pub mod radius_query;
+
+pub use bbox_query::{find_locations_in_bbox, BBoxSearchOptions};
+pub use clustering::cluster_locations_in_bbox;
+pub use error::QueryError;
+pub use models::{LocationCluster, NearbyLocation};
+pub use radius_query::{find_locations_within_radius, find_nearest_neighbors};
+
+--------------------------------------------------
+FILE: crates\geo-presentation\src\cluster.rs
+--------------------------------------------------
+use crate::feature::{GeoJsonGeometry, MapFeature};
+use geo_query::LocationCluster;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ClusterProperties {
+    pub cluster: bool,
+    pub point_count: i64,
+    pub bbox: [f64; 4], // [west, south, east, north]
+}
+
+pub type ClusterFeature = MapFeature<ClusterProperties>;
+
+impl From<LocationCluster> for ClusterFeature {
+    fn from(c: LocationCluster) -> Self {
+        let props = ClusterProperties {
+            cluster: true,
+            point_count: c.count,
+            bbox: [
+                c.bounds.west(),
+                c.bounds.south(),
+                c.bounds.east(),
+                c.bounds.north(),
+            ],
+        };
+
+        MapFeature {
+            r#type: "Feature",
+            id: None,
+            geometry: GeoJsonGeometry::Point {
+                coordinates: c.center.to_coordinates(),
+            },
+            properties: props,
+        }
+    }
+}
+
+--------------------------------------------------
+FILE: crates\geo-presentation\src\lib.rs
+--------------------------------------------------
+pub mod cluster;
+pub mod feature;
+pub mod marker;
+
+pub use cluster::{ClusterFeature, ClusterProperties};
+pub use feature::{FeatureCollection, GeoJsonGeometry, LocationProperties, MapFeature};
+pub use marker::MarkerDto;
+
+--------------------------------------------------
+FILE: migrations\20240101000026_optimize_search_and_spatial_indexes.sql
+--------------------------------------------------
+-- =============================================================================
+-- MIGRATION 26: HIGH-PERFORMANCE SEARCH & COMPOSITE SPATIAL INDEXES
+-- =============================================================================
+
+BEGIN;
+
+-- ۱. ایندکس ترکیبی وضعیت آگهی و تاریخ انتشار (جهت واکشی فوق سریع سورت جدیدترین)
+CREATE INDEX IF NOT EXISTS idx_opportunities_published_covering 
+ON opportunities (status, published_at DESC) 
+WHERE status = 'published';
+
+-- ۲. ایندکس ترکیبی آگهی‌های استخدام فوری
+CREATE INDEX IF NOT EXISTS idx_opportunities_urgent_published 
+ON opportunities (is_urgent, published_at DESC) 
+WHERE status = 'published' AND is_urgent = true;
+
+-- ۳. ایندکس معکوس جدول واسط لوکیشن به آگهی (حیاتی برای JOIN سریع نقشه)
+CREATE INDEX IF NOT EXISTS idx_opportunity_locations_reverse 
+ON opportunity_locations (location_id, opportunity_id);
+
+-- ۴. ایندکس مهارت‌های آگهی برای جلوگیری از اسکن کامل جدول
+CREATE INDEX IF NOT EXISTS idx_opportunity_skills_skill 
+ON opportunity_skills (skill_id, opportunity_id);
+
+COMMIT;

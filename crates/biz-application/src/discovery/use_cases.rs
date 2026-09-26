@@ -1,7 +1,8 @@
 use super::dto::{GetMapPinsRequest, SearchOpportunitiesRequest};
 use crate::error::ApplicationError;
 use biz_domain::discovery::{
-    query::SearchCursor, MapPinSummary, OpportunitySearchResult, SearchPageResult, SearchQuery, SortBy,
+    query::SearchCursor, MapMarker, MapPinSummary, OpportunitySearchResult,
+    SearchPageResult, SearchQuery, SortBy,
 };
 use biz_storage::{CandidateRepository, DiscoveryRepository};
 use geo_types::{BoundingBox, GeoPoint, Radius};
@@ -132,6 +133,8 @@ impl DiscoveryUseCases {
         Ok(result)
     }
 
+    /// Legacy endpoint — نگه داشته شده برای backward compatibility
+    #[allow(deprecated)]
     pub async fn get_map_pins(&self, req: GetMapPinsRequest) -> Result<Vec<MapPinSummary>, ApplicationError> {
         let bbox = match req.bbox {
             Some(ref b) => {
@@ -186,6 +189,100 @@ impl DiscoveryUseCases {
         ).await?;
 
         Ok(pins)
+    }
+
+    /// واکشی marker های نقشه با کلاستربندی سرور-ساید
+    /// - zoom >= 15: تمام pins به صورت Single
+    /// - zoom < 15: کلاستربندی در grid cell ها
+    pub async fn get_map_markers(
+        &self,
+        req: GetMapPinsRequest,
+    ) -> Result<Vec<MapMarker>, ApplicationError> {
+        let bbox = match req.bbox {
+            Some(ref b) => {
+                let parts: Vec<&str> = b.split(',').collect();
+                if parts.len() == 4 {
+                    let w: f64 = parts[0]
+                        .trim()
+                        .parse()
+                        .map_err(|_| ApplicationError::Validation("Invalid bbox west".into()))?;
+                    let s: f64 = parts[1]
+                        .trim()
+                        .parse()
+                        .map_err(|_| ApplicationError::Validation("Invalid bbox south".into()))?;
+                    let e: f64 = parts[2]
+                        .trim()
+                        .parse()
+                        .map_err(|_| ApplicationError::Validation("Invalid bbox east".into()))?;
+                    let n: f64 = parts[3]
+                        .trim()
+                        .parse()
+                        .map_err(|_| ApplicationError::Validation("Invalid bbox north".into()))?;
+                    Some(
+                        BoundingBox::new(w, s, e, n)
+                            .map_err(|e| ApplicationError::Validation(e.to_string()))?,
+                    )
+                } else {
+                    None
+                }
+            }
+            None => None,
+        };
+
+        let point = match (req.lon, req.lat) {
+            (Some(lon), Some(lat)) => Some(
+                GeoPoint::new(lon, lat)
+                    .map_err(|e| ApplicationError::Validation(e.to_string()))?,
+            ),
+            _ => None,
+        };
+
+        let radius = match req.radius_meters {
+            Some(r) => Some(
+                Radius::from_meters(r)
+                    .map_err(|e| ApplicationError::Validation(e.to_string()))?,
+            ),
+            None => None,
+        };
+
+        let skill_ids: Vec<Uuid> = req
+            .skill_ids
+            .map(|raw| {
+                raw.split(',')
+                    .filter_map(|s| Uuid::parse_str(s.trim()).ok())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let zoom = req.zoom.unwrap_or(12).min(22);
+
+        // در حالت کلاستر، سقف markers کمتره (چون aggregation شده‌اند)
+        // در حالت single، سقف بیشتره
+        let default_limit = if zoom >= 15 { 300 } else { 200 };
+        let limit = req.limit.unwrap_or(default_limit).min(500);
+
+        let markers = self
+            .discovery_repo
+            .list_map_markers(
+                req.q.as_deref(),
+                bbox.as_ref(),
+                point.as_ref(),
+                radius.as_ref(),
+                req.city.as_deref(),
+                req.category_id,
+                &skill_ids,
+                req.opportunity_type.as_deref(),
+                req.workplace_type.as_deref(),
+                req.experience_level.as_deref(),
+                req.salary_min,
+                req.salary_max,
+                req.is_urgent,
+                zoom,
+                limit,
+            )
+            .await?;
+
+        Ok(markers)
     }
 
     pub async fn get_by_location(&self, location_id: Uuid) -> Result<Vec<OpportunitySearchResult>, ApplicationError> {

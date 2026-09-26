@@ -7,7 +7,9 @@ use axum::{
     Json,
 };
 use biz_application::discovery::{GetMapPinsRequest, SearchOpportunitiesRequest};
-use biz_domain::discovery::{MapPinSummary, OpportunitySearchResult, SearchPageResult};
+use biz_domain::discovery::{
+    MapMarker, MapPinSummary, OpportunitySearchResult, SearchPageResult,
+};
 use uuid::Uuid;
 
 #[utoipa::path(
@@ -40,11 +42,12 @@ pub async fn get_recommended_opportunities_handler(
     Ok(Json(result))
 }
 
+#[allow(deprecated)]
 #[utoipa::path(
     get,
     path = "/api/v1/opportunities/map-pins",
     params(GetMapPinsRequest),
-    responses((status = 200, description = "Aggregated map pin clusters with job counts", body = Vec<MapPinSummary>)),
+    responses((status = 200, description = "Aggregated map pin clusters with job counts (legacy)", body = Vec<MapPinSummary>)),
     tag = "Discovery"
 )]
 pub async fn get_map_pins_handler(
@@ -53,6 +56,25 @@ pub async fn get_map_pins_handler(
 ) -> Result<impl IntoResponse, ApiError> {
     let pins = state.discovery_use_cases.get_map_pins(req).await?;
     Ok(Json(pins))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/opportunities/map-markers",
+    params(GetMapPinsRequest),
+    responses((
+        status = 200,
+        description = "Server-side clustered map markers (Single + Cluster)",
+        body = Vec<MapMarker>
+    )),
+    tag = "Discovery"
+)]
+pub async fn get_map_markers_handler(
+    State(state): State<AppState>,
+    Query(req): Query<GetMapPinsRequest>,
+) -> Result<impl IntoResponse, ApiError> {
+    let markers = state.discovery_use_cases.get_map_markers(req).await?;
+    Ok(Json(markers))
 }
 
 #[utoipa::path(
